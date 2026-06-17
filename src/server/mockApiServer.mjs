@@ -5,7 +5,7 @@ import { answerChatWithLlm, extractProfilePatchWithLlm, hasConfiguredLlm, resolv
 import { createPaymentCheckout, getPaymentProviderStatus } from "./paymentProviders.mjs";
 
 loadEnvFile();
-const port = Number(process.env.MAGERLIFE_API_PORT || 8787);
+const port = Number(process.env.MAGERLIFE_API_PORT || process.env.PORT || 8787);
 const host = process.env.MAGERLIFE_API_HOST || "127.0.0.1";
 const persistenceRepository = await createPersistenceRepository();
 const rateLimitWindowMs = 60_000;
