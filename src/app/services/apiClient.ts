@@ -32,11 +32,18 @@ export async function callMagerLifeApi<TEndpoint extends ApiEndpoint>(
       body: method === "GET" ? undefined : JSON.stringify(request),
     });
     if (!response.ok) {
+      let apiError: { code?: string; message?: string } | null = null;
+      try {
+        const payload = await response.json();
+        apiError = payload?.error || null;
+      } catch {
+        apiError = null;
+      }
       return {
         ok: false,
         error: {
-          code: `HTTP_${response.status}`,
-          message: response.statusText || "API request failed",
+          code: apiError?.code || `HTTP_${response.status}`,
+          message: apiError?.message || response.statusText || "API request failed",
         },
       };
     }

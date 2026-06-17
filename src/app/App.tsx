@@ -1389,7 +1389,9 @@ function AuthFlow({ onComplete }: { onComplete: (profile: UserProfile) => void }
       return;
     }
     if (apiRegister.error?.code !== "NETWORK_ERROR") {
-      setError(apiRegister.error?.code === "HTTP_409" ? "Email này đã được đăng ký." : "Chưa thể đăng ký tài khoản qua API.");
+      setError(apiRegister.error?.code === "HTTP_409" || apiRegister.error?.code === "ACCOUNT_EXISTS"
+        ? "Email này đã được đăng ký."
+        : `Chưa thể đăng ký tài khoản qua API: ${apiRegister.error?.message || apiRegister.error?.code || "Không rõ lỗi"}`);
       return;
     }
     saveAuthAccount<UserProfile>(accountKey, draftProfile);

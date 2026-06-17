@@ -246,23 +246,24 @@ function estimateFoodFromText(text = "") {
 }
 
 export async function handleMagerLifeApiRequest(req, res) {
-  if (isRateLimited(req)) {
-    sendJson(req, res, 429, {
-      error: {
-        code: "RATE_LIMITED",
-        message: "Too many requests. Please retry later.",
-      },
-    });
-    return;
-  }
+  try {
+    if (isRateLimited(req)) {
+      sendJson(req, res, 429, {
+        error: {
+          code: "RATE_LIMITED",
+          message: "Too many requests. Please retry later.",
+        },
+      });
+      return;
+    }
 
-  if (req.method === "OPTIONS") {
-    sendJson(req, res, 200, { ok: true });
-    return;
-  }
+    if (req.method === "OPTIONS") {
+      sendJson(req, res, 200, { ok: true });
+      return;
+    }
 
-  const url = new URL(req.url || "/", `http://${req.headers.host || "localhost"}`);
-  const body = req.method === "GET" ? readGetPayload(url) : await readJson(req);
+    const url = new URL(req.url || "/", `http://${req.headers.host || "localhost"}`);
+    const body = req.method === "GET" ? readGetPayload(url) : await readJson(req);
 
   if (req.method === "GET" && url.pathname === "/health") {
     const provider = process.env.MAGERLIFE_LLM_PROVIDER || "groq";
@@ -503,12 +504,21 @@ export async function handleMagerLifeApiRequest(req, res) {
     return;
   }
 
-  sendJson(req, res, 404, {
-    error: {
-      code: "NOT_FOUND",
-      message: "Unknown MagerLife mock API route",
-    },
-  });
+    sendJson(req, res, 404, {
+      error: {
+        code: "NOT_FOUND",
+        message: "Unknown MagerLife mock API route",
+      },
+    });
+  } catch (error) {
+    console.error("MagerLife API error", error);
+    sendJson(req, res, 500, {
+      error: {
+        code: "INTERNAL_SERVER_ERROR",
+        message: error instanceof Error ? error.message : "Unexpected server error",
+      },
+    });
+  }
 }
 
 export function createMagerLifeApiServer() {
