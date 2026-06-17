@@ -205,6 +205,13 @@ function createMemoryRepository() {
 
   return {
     driver: "memory",
+    async checkConnection() {
+      return {
+        ok: true,
+        driver: "memory",
+        schemaReady: true,
+      };
+    },
     async registerAccount({ email, password, profile = {} } = {}) {
       const normalizedEmail = normalizeEmail(email);
       if (!normalizedEmail || !password) return { error: { code: "VALIDATION_ERROR", message: "Email and password are required" } };
@@ -824,6 +831,14 @@ async function createPostgresRepository() {
 
   return {
     driver: "postgres",
+    async checkConnection() {
+      const result = await pool.query("select 1 as ok, to_regclass('public.app_users') as app_users");
+      return {
+        ok: result.rows[0]?.ok === 1,
+        driver: "postgres",
+        schemaReady: result.rows[0]?.app_users === "app_users",
+      };
+    },
     async registerAccount({ email, password, profile = {} } = {}) {
       const normalizedEmail = normalizeEmail(email);
       if (!normalizedEmail || !password) return { error: { code: "VALIDATION_ERROR", message: "Email and password are required" } };

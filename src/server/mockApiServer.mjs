@@ -245,6 +245,34 @@ function estimateFoodFromText(text = "") {
   };
 }
 
+function databaseUrlSummary() {
+  const rawUrl = process.env.DATABASE_URL || "";
+  if (!rawUrl) {
+    return {
+      configured: false,
+      host: "",
+      port: "",
+      pooler: false,
+    };
+  }
+  try {
+    const url = new URL(rawUrl);
+    return {
+      configured: true,
+      host: url.hostname,
+      port: url.port,
+      pooler: url.hostname.includes(".pooler.supabase.com"),
+    };
+  } catch {
+    return {
+      configured: true,
+      host: "invalid-url",
+      port: "",
+      pooler: false,
+    };
+  }
+}
+
 export async function handleMagerLifeApiRequest(req, res) {
   try {
     if (isRateLimited(req)) {
@@ -274,6 +302,32 @@ export async function handleMagerLifeApiRequest(req, res) {
       llmConfigured: hasConfiguredLlm(),
       serverTime: new Date().toISOString(),
     });
+    return;
+  }
+
+  if (req.method === "GET" && url.pathname === "/health/db") {
+    const database = databaseUrlSummary();
+    try {
+      const connection = await persistenceRepository.checkConnection();
+      sendJson(req, res, 200, {
+        ok: Boolean(connection.ok && connection.schemaReady),
+        driver: persistenceRepository.driver,
+        database,
+        connection,
+        serverTime: new Date().toISOString(),
+      });
+    } catch (error) {
+      sendJson(req, res, 500, {
+        ok: false,
+        driver: persistenceRepository.driver,
+        database,
+        error: {
+          code: error?.code || "DB_HEALTH_FAILED",
+          message: error instanceof Error ? error.message : "Database health check failed",
+        },
+        serverTime: new Date().toISOString(),
+      });
+    }
     return;
   }
 
