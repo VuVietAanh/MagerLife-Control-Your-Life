@@ -1,4 +1,5 @@
 import http from "node:http";
+import { pathToFileURL } from "node:url";
 import { createPersistenceRepository, verifySessionToken } from "./dbRepository.mjs";
 import { loadEnvFile } from "./envLoader.mjs";
 import { answerChatWithLlm, extractProfilePatchWithLlm, hasConfiguredLlm, resolveFoodWithLlm } from "./llmProvider.mjs";
@@ -244,7 +245,7 @@ function estimateFoodFromText(text = "") {
   };
 }
 
-const server = http.createServer(async (req, res) => {
+export async function handleMagerLifeApiRequest(req, res) {
   if (isRateLimited(req)) {
     sendJson(req, res, 429, {
       error: {
@@ -508,12 +509,21 @@ const server = http.createServer(async (req, res) => {
       message: "Unknown MagerLife mock API route",
     },
   });
-});
+}
 
-server.listen(port, host, () => {
-  console.log(`MagerLife API listening at http://${host}:${port}`);
-  const provider = process.env.MAGERLIFE_LLM_PROVIDER || "groq";
-  const model = provider === "groq" ? process.env.GROQ_MODEL : process.env.XAI_MODEL;
-  console.log(`LLM provider: ${hasConfiguredLlm() ? `${provider} (${model || "default"})` : "mock fallback"}`);
-  console.log(`Persistence driver: ${persistenceRepository.driver}`);
-});
+export function createMagerLifeApiServer() {
+  return http.createServer(handleMagerLifeApiRequest);
+}
+
+const isDirectRun = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
+
+if (isDirectRun) {
+  const server = createMagerLifeApiServer();
+  server.listen(port, host, () => {
+    console.log(`MagerLife API listening at http://${host}:${port}`);
+    const provider = process.env.MAGERLIFE_LLM_PROVIDER || "groq";
+    const model = provider === "groq" ? process.env.GROQ_MODEL : process.env.XAI_MODEL;
+    console.log(`LLM provider: ${hasConfiguredLlm() ? `${provider} (${model || "default"})` : "mock fallback"}`);
+    console.log(`Persistence driver: ${persistenceRepository.driver}`);
+  });
+}
