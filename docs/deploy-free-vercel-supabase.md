@@ -28,7 +28,7 @@ Use these settings:
 - Build Command: `npm run build`
 - Output Directory: `dist`
 
-The API is deployed from `api/[...path].mjs`. The frontend should call the same Vercel domain with:
+The API is deployed from `api/[...path].js`. The frontend should call the same Vercel domain with:
 
 ```env
 VITE_MAGERLIFE_API_BASE_URL=/api
