@@ -15,7 +15,7 @@ export async function callMagerLifeApi<TEndpoint extends ApiEndpoint>(
   options: ApiClientOptions = {}
 ): Promise<ApiResult<ApiEndpointMap[TEndpoint]["response"]>> {
   const [method, path] = endpoint.split(" ") as ["GET" | "POST" | "PATCH" | "PUT", string];
-  const baseUrl = options.baseUrl || MAGERLIFE_API_BASE_URL;
+  const baseUrl = (options.baseUrl || MAGERLIFE_API_BASE_URL).replace(/\/$/, "");
   const fetcher = options.fetcher || fetch;
   const url = method === "GET"
     ? `${baseUrl}${path}?payload=${encodeURIComponent(JSON.stringify(request))}`

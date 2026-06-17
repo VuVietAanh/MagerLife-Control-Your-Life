@@ -76,6 +76,10 @@ export async function getApiHealth(options?: ApiClientOptions) {
   return callMagerLifeApi("GET /health", {}, options);
 }
 
+export async function getApiDbHealth(options?: ApiClientOptions) {
+  return callMagerLifeApi("GET /health/db", {}, options);
+}
+
 export async function registerAccountViaApi({
   email,
   password,

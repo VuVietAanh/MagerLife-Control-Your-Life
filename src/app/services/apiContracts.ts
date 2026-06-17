@@ -270,10 +270,35 @@ export type ApiHealthResponse = {
   serverTime: string;
 };
 
+export type ApiDbHealthResponse = {
+  ok: boolean;
+  driver: "memory" | "postgres" | string;
+  database?: {
+    configured: boolean;
+    host: string;
+    port: string;
+    pooler: boolean;
+  };
+  connection?: {
+    ok: boolean;
+    driver: "memory" | "postgres" | string;
+    schemaReady: boolean;
+  };
+  error?: {
+    code: string;
+    message: string;
+  };
+  serverTime: string;
+};
+
 export type ApiEndpointMap = {
   "GET /health": {
     request: ApiHealthRequest;
     response: ApiHealthResponse;
+  };
+  "GET /health/db": {
+    request: ApiHealthRequest;
+    response: ApiDbHealthResponse;
   };
   "POST /auth/register": {
     request: AuthRegisterRequest;

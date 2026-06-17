@@ -76,12 +76,18 @@ import {
   profileSignalChips,
 } from "./services/profileService";
 import { buildAgentTrainingSamples, serializeTrainingSamplesAsJsonl } from "./services/trainingDatasetService";
-import { getAdminAnalyticsFromApi, getApiHealth, getFinanceSnapshotFromApi, getFoodLibraryFromApi, logNutritionMealToApi, loginAccountViaApi, registerAccountViaApi, saveFinanceSnapshotToApi, saveFoodLibraryToApi, saveProfileToApi, sendChatTurnToApi, syncAgentEventsToApi, syncPersistenceSnapshotToApi, updateProfileViaApi } from "./services/magerLifeApiFacade";
+import { MAGERLIFE_API_BASE_URL } from "./services/apiConfig";
+import { getAdminAnalyticsFromApi, getApiDbHealth, getApiHealth, getFinanceSnapshotFromApi, getFoodLibraryFromApi, logNutritionMealToApi, loginAccountViaApi, registerAccountViaApi, saveFinanceSnapshotToApi, saveFoodLibraryToApi, saveProfileToApi, sendChatTurnToApi, syncAgentEventsToApi, syncPersistenceSnapshotToApi, updateProfileViaApi } from "./services/magerLifeApiFacade";
 import { fetchWeatherForecast, resolveManualWeatherPlace, type WeatherPlace } from "./services/weatherService";
 
 type Tab = "dashboard" | "finance" | "onboarding" | "account" | "admin" | "brain" | "routing" | "food-admin";
 
 const foodServingUnits = FOOD_SERVING_UNITS;
+
+function isLocalBrowserHost() {
+  if (typeof window === "undefined") return true;
+  return ["localhost", "127.0.0.1", ""].includes(window.location.hostname);
+}
 
 function analyzeBodyGoalText(text: string) {
   const normalized = text.toLowerCase();
@@ -1389,9 +1395,17 @@ function AuthFlow({ onComplete }: { onComplete: (profile: UserProfile) => void }
       return;
     }
     if (apiRegister.error?.code !== "NETWORK_ERROR") {
+      const dbHealth = await getApiDbHealth();
+      const dbHint = dbHealth.ok && dbHealth.data
+        ? ` DB=${dbHealth.data.driver}, pooler=${dbHealth.data.database?.pooler ? "yes" : "no"}, schema=${dbHealth.data.connection?.schemaReady ? "yes" : "no"}.`
+        : ` DB health lỗi: ${dbHealth.error?.message || "không gọi được /health/db"}.`;
       setError(apiRegister.error?.code === "HTTP_409" || apiRegister.error?.code === "ACCOUNT_EXISTS"
         ? "Email này đã được đăng ký."
-        : `Chưa thể đăng ký tài khoản qua API: ${apiRegister.error?.message || apiRegister.error?.code || "Không rõ lỗi"}`);
+        : `Chưa thể đăng ký tài khoản qua API: ${apiRegister.error?.message || apiRegister.error?.code || "Không rõ lỗi"}.${dbHint}`);
+      return;
+    }
+    if (!isLocalBrowserHost()) {
+      setError(`Không gọi được API tại ${MAGERLIFE_API_BASE_URL}. Kiểm tra Vercel env VITE_MAGERLIFE_API_BASE_URL=/api rồi Redeploy.`);
       return;
     }
     saveAuthAccount<UserProfile>(accountKey, draftProfile);
