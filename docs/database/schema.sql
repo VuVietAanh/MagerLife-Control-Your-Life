@@ -161,6 +161,38 @@ create table if not exists agent_training_records (
   created_at timestamptz not null default now()
 );
 
+-- Migration-safe patches for databases that already had older draft tables.
+alter table if exists app_users add column if not exists password_hash text;
+alter table if exists app_users add column if not exists password_salt text;
+alter table if exists app_users add column if not exists status text not null default 'active';
+alter table if exists app_users add column if not exists last_active_at timestamptz;
+alter table if exists app_users add column if not exists created_at timestamptz not null default now();
+alter table if exists app_users add column if not exists updated_at timestamptz not null default now();
+
+alter table if exists user_profiles add column if not exists profile_payload jsonb not null default '{}'::jsonb;
+alter table if exists user_profiles add column if not exists setup_complete boolean not null default false;
+alter table if exists user_profiles add column if not exists updated_at timestamptz not null default now();
+
+alter table if exists user_jars add column if not exists jar_key text;
+alter table if exists user_jars add column if not exists monthly_allocation numeric(14,2) not null default 0;
+alter table if exists user_jars add column if not exists purpose_note text;
+alter table if exists user_jars add column if not exists linked_goals jsonb not null default '[]'::jsonb;
+alter table if exists user_jars add column if not exists is_fixed boolean not null default false;
+alter table if exists user_jars add column if not exists created_at timestamptz not null default now();
+alter table if exists user_jars add column if not exists updated_at timestamptz not null default now();
+
+alter table if exists transactions add column if not exists external_id text;
+alter table if exists transactions add column if not exists user_id uuid references app_users(id) on delete cascade;
+alter table if exists transactions add column if not exists jar_id uuid references user_jars(id) on delete set null;
+alter table if exists transactions add column if not exists type text not null default 'expense';
+alter table if exists transactions add column if not exists amount numeric(14,2) not null default 0;
+alter table if exists transactions add column if not exists currency text not null default 'VND';
+alter table if exists transactions add column if not exists item_name text not null default 'Giao dịch';
+alter table if exists transactions add column if not exists spent_at timestamptz not null default now();
+alter table if exists transactions add column if not exists note text;
+alter table if exists transactions add column if not exists created_at timestamptz not null default now();
+
+create unique index if not exists idx_transactions_external_id_unique on transactions(external_id) where external_id is not null;
 create index if not exists idx_app_users_plan on app_users(subscription_plan);
 create index if not exists idx_app_users_role on app_users(role);
 create index if not exists idx_transactions_user_spent_at on transactions(user_id, spent_at desc);
