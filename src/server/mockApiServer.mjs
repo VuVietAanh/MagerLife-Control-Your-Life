@@ -11,6 +11,12 @@ const persistenceRepository = await createPersistenceRepository();
 const rateLimitWindowMs = 60_000;
 const rateLimitMaxRequests = Number(process.env.MAGERLIFE_RATE_LIMIT_PER_MIN || 180);
 const rateLimitBuckets = new Map();
+const corsOrigins = new Set(
+  String(process.env.MAGERLIFE_CORS_ORIGINS || "*")
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean)
+);
 
 function readJson(req) {
   return new Promise((resolve) => {
@@ -28,27 +34,35 @@ function readJson(req) {
   });
 }
 
-function sendJson(res, status, payload) {
+function corsOriginForRequest(req) {
+  const origin = req.headers.origin || "";
+  if (corsOrigins.has("*")) return "*";
+  if (origin && corsOrigins.has(origin)) return origin;
+  return [...corsOrigins][0] || "*";
+}
+
+function sendJson(req, res, status, payload) {
   res.writeHead(status, {
     "Content-Type": "application/json; charset=utf-8",
-    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Origin": corsOriginForRequest(req),
+    "Vary": "Origin",
     "Access-Control-Allow-Headers": "Content-Type, Authorization",
     "Access-Control-Allow-Methods": "GET,POST,PATCH,PUT,OPTIONS",
   });
   res.end(JSON.stringify(payload));
 }
 
-function sendRepositoryResult(res, result, successStatus = 200) {
+function sendRepositoryResult(req, res, result, successStatus = 200) {
   if (result?.error) {
     const status = result.error.code === "ACCOUNT_EXISTS" ? 409 : result.error.code === "INVALID_CREDENTIALS" ? 401 : 400;
-    sendJson(res, status, { error: result.error });
+    sendJson(req, res, status, { error: result.error });
     return;
   }
-  sendJson(res, successStatus, result);
+  sendJson(req, res, successStatus, result);
 }
 
-function sendValidationError(res, message, details = {}) {
-  sendJson(res, 400, {
+function sendValidationError(req, res, message, details = {}) {
+  sendJson(req, res, 400, {
     error: {
       code: "VALIDATION_ERROR",
       message,
@@ -140,7 +154,7 @@ function validateBillingCheckout(body = {}) {
 function requireBillingSecret(req, res) {
   const expected = process.env.MAGERLIFE_BILLING_WEBHOOK_SECRET || "";
   if (!expected) {
-    sendJson(res, 503, {
+    sendJson(req, res, 503, {
       error: {
         code: "BILLING_WEBHOOK_NOT_CONFIGURED",
         message: "Billing webhook secret is not configured",
@@ -150,7 +164,7 @@ function requireBillingSecret(req, res) {
   }
   const provided = String(req.headers["x-magerlife-billing-secret"] || "");
   if (provided !== expected) {
-    sendJson(res, 401, {
+    sendJson(req, res, 401, {
       error: {
         code: "INVALID_BILLING_WEBHOOK_SECRET",
         message: "Invalid billing webhook secret",
@@ -170,7 +184,7 @@ function getBearerToken(req) {
 function requireSession(req, res, targetUserId = "", options = {}) {
   const session = verifySessionToken(getBearerToken(req));
   if (!session) {
-    sendJson(res, 401, {
+    sendJson(req, res, 401, {
       error: {
         code: "UNAUTHENTICATED",
         message: "A valid session token is required",
@@ -179,7 +193,7 @@ function requireSession(req, res, targetUserId = "", options = {}) {
     return null;
   }
   if (options.adminOnly && session.role !== "admin") {
-    sendJson(res, 403, {
+    sendJson(req, res, 403, {
       error: {
         code: "FORBIDDEN",
         message: "Admin role is required",
@@ -189,7 +203,7 @@ function requireSession(req, res, targetUserId = "", options = {}) {
   }
   const normalizedTarget = String(targetUserId || "").trim().toLowerCase();
   if (normalizedTarget && normalizedTarget !== session.sub && session.role !== "admin") {
-    sendJson(res, 403, {
+    sendJson(req, res, 403, {
       error: {
         code: "FORBIDDEN",
         message: "Session does not match requested user",
@@ -232,7 +246,7 @@ function estimateFoodFromText(text = "") {
 
 const server = http.createServer(async (req, res) => {
   if (isRateLimited(req)) {
-    sendJson(res, 429, {
+    sendJson(req, res, 429, {
       error: {
         code: "RATE_LIMITED",
         message: "Too many requests. Please retry later.",
@@ -242,7 +256,7 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (req.method === "OPTIONS") {
-    sendJson(res, 200, { ok: true });
+    sendJson(req, res, 200, { ok: true });
     return;
   }
 
@@ -251,7 +265,7 @@ const server = http.createServer(async (req, res) => {
 
   if (req.method === "GET" && url.pathname === "/health") {
     const provider = process.env.MAGERLIFE_LLM_PROVIDER || "groq";
-    sendJson(res, 200, {
+    sendJson(req, res, 200, {
       ok: true,
       provider: hasConfiguredLlm() ? provider : "mock",
       model: provider === "groq" ? process.env.GROQ_MODEL : process.env.XAI_MODEL,
@@ -264,20 +278,20 @@ const server = http.createServer(async (req, res) => {
   if (req.method === "POST" && url.pathname === "/auth/register") {
     const validationError = validateAuthRegister(body);
     if (validationError) {
-      sendValidationError(res, validationError);
+      sendValidationError(req, res, validationError);
       return;
     }
-    sendRepositoryResult(res, await persistenceRepository.registerAccount(body), 201);
+    sendRepositoryResult(req, res, await persistenceRepository.registerAccount(body), 201);
     return;
   }
 
   if (req.method === "POST" && url.pathname === "/auth/login") {
     const validationError = validateAuthLogin(body);
     if (validationError) {
-      sendValidationError(res, validationError);
+      sendValidationError(req, res, validationError);
       return;
     }
-    sendRepositoryResult(res, await persistenceRepository.loginAccount(body));
+    sendRepositoryResult(req, res, await persistenceRepository.loginAccount(body));
     return;
   }
 
@@ -285,15 +299,15 @@ const server = http.createServer(async (req, res) => {
     if (!requireBillingSecret(req, res)) return;
     const validationError = validateBillingWebhook(body);
     if (validationError) {
-      sendValidationError(res, validationError);
+      sendValidationError(req, res, validationError);
       return;
     }
-    sendRepositoryResult(res, await persistenceRepository.applyBillingWebhook(body));
+    sendRepositoryResult(req, res, await persistenceRepository.applyBillingWebhook(body));
     return;
   }
 
   if (req.method === "GET" && url.pathname === "/billing/providers") {
-    sendJson(res, 200, { providers: getPaymentProviderStatus() });
+    sendJson(req, res, 200, { providers: getPaymentProviderStatus() });
     return;
   }
 
@@ -301,22 +315,22 @@ const server = http.createServer(async (req, res) => {
     if (!requireSession(req, res, body?.userId || "")) return;
     const validationError = validateBillingCheckout(body);
     if (validationError) {
-      sendValidationError(res, validationError);
+      sendValidationError(req, res, validationError);
       return;
     }
-    sendRepositoryResult(res, await createPaymentCheckout(body));
+    sendRepositoryResult(req, res, await createPaymentCheckout(body));
     return;
   }
 
   if (req.method === "GET" && url.pathname === "/me") {
     if (!requireSession(req, res, body?.userId || "")) return;
-    sendRepositoryResult(res, await persistenceRepository.getProfile(body?.userId || ""));
+    sendRepositoryResult(req, res, await persistenceRepository.getProfile(body?.userId || ""));
     return;
   }
 
   if (req.method === "PATCH" && url.pathname === "/profile") {
     if (!requireSession(req, res, body?.userId || body?.patch?.email || "")) return;
-    sendRepositoryResult(res, await persistenceRepository.patchProfile(body));
+    sendRepositoryResult(req, res, await persistenceRepository.patchProfile(body));
     return;
   }
 
@@ -328,10 +342,10 @@ const server = http.createServer(async (req, res) => {
           profile: body?.profile || {},
           clientContext: body?.clientContext || {},
         });
-        sendJson(res, 200, result);
+        sendJson(req, res, 200, result);
         return;
       } catch (error) {
-        sendJson(res, 200, {
+        sendJson(req, res, 200, {
           message: `LLM tạm lỗi nên hệ thống dùng rule/mock fallback. ${error instanceof Error ? error.message : ""}`.trim(),
           profilePatch: {},
           pendingAction: body?.text?.includes("ăn") ? { type: "resolve_food", reason: "Need nutrition resolver" } : undefined,
@@ -339,7 +353,7 @@ const server = http.createServer(async (req, res) => {
         return;
       }
     }
-    sendJson(res, 200, {
+    sendJson(req, res, 200, {
       message: "Mock API đã nhận chat turn. Backend thật sẽ gọi router/rule/LLM tại đây.",
       profilePatch: {},
       pendingAction: body?.text?.includes("ăn") ? { type: "resolve_food", reason: "Need nutrition resolver" } : undefined,
@@ -350,7 +364,7 @@ const server = http.createServer(async (req, res) => {
   if (req.method === "POST" && url.pathname === "/nutrition/resolve-food") {
     if (hasConfiguredLlm()) {
       try {
-        sendJson(res, 200, await resolveFoodWithLlm({
+        sendJson(req, res, 200, await resolveFoodWithLlm({
           text: body?.text || "",
           meal: body?.meal,
           profile: body?.profile || {},
@@ -358,7 +372,7 @@ const server = http.createServer(async (req, res) => {
         return;
       } catch (error) {
         const candidate = estimateFoodFromText(body?.text || "");
-        sendJson(res, 200, {
+        sendJson(req, res, 200, {
           status: "needs_confirmation",
           candidates: [{ ...candidate, note: error instanceof Error ? error.message : "LLM fallback" }],
         });
@@ -366,7 +380,7 @@ const server = http.createServer(async (req, res) => {
       }
     }
     const candidate = estimateFoodFromText(body?.text || "");
-    sendJson(res, 200, {
+    sendJson(req, res, 200, {
       status: "needs_confirmation",
       candidates: [candidate],
     });
@@ -377,16 +391,16 @@ const server = http.createServer(async (req, res) => {
     if (!requireSession(req, res, body?.userId || "")) return;
     const validationError = validateNutritionLog(body);
     if (validationError) {
-      sendValidationError(res, validationError);
+      sendValidationError(req, res, validationError);
       return;
     }
-    sendRepositoryResult(res, await persistenceRepository.logNutritionMeal(body));
+    sendRepositoryResult(req, res, await persistenceRepository.logNutritionMeal(body));
     return;
   }
 
   if (req.method === "GET" && url.pathname === "/food-library") {
     if (body?.scope && body.scope !== "admin" && !requireSession(req, res, body?.userId || "")) return;
-    sendRepositoryResult(res, await persistenceRepository.getFoodLibrary(body));
+    sendRepositoryResult(req, res, await persistenceRepository.getFoodLibrary(body));
     return;
   }
 
@@ -394,16 +408,16 @@ const server = http.createServer(async (req, res) => {
     if (!requireSession(req, res, body?.userId || "")) return;
     const validationError = validateFoodLibraryUpsert(body);
     if (validationError) {
-      sendValidationError(res, validationError);
+      sendValidationError(req, res, validationError);
       return;
     }
-    sendRepositoryResult(res, await persistenceRepository.upsertFoodLibrary(body));
+    sendRepositoryResult(req, res, await persistenceRepository.upsertFoodLibrary(body));
     return;
   }
 
   if (req.method === "GET" && url.pathname === "/finance/snapshot") {
     if (!requireSession(req, res, body?.userId || "")) return;
-    sendRepositoryResult(res, await persistenceRepository.getFinanceSnapshot(body?.userId || ""));
+    sendRepositoryResult(req, res, await persistenceRepository.getFinanceSnapshot(body?.userId || ""));
     return;
   }
 
@@ -411,10 +425,10 @@ const server = http.createServer(async (req, res) => {
     if (!requireSession(req, res, body?.userId || body?.financeSnapshot?.userId || "")) return;
     const validationError = validateFinanceSnapshot(body);
     if (validationError) {
-      sendValidationError(res, validationError);
+      sendValidationError(req, res, validationError);
       return;
     }
-    sendRepositoryResult(res, await persistenceRepository.upsertFinanceSnapshot(body));
+    sendRepositoryResult(req, res, await persistenceRepository.upsertFinanceSnapshot(body));
     return;
   }
 
@@ -427,14 +441,14 @@ const server = http.createServer(async (req, res) => {
           currentProfile: body.profile || {},
         });
         const mergedPatch = { ...(body.patch || {}), ...extraction.patch };
-        sendJson(res, 200, {
+        sendJson(req, res, 200, {
           profile: mergedPatch,
           changedFields: Object.keys(mergedPatch),
           warnings: extraction.warnings,
         });
         return;
       } catch (error) {
-        sendJson(res, 200, {
+        sendJson(req, res, 200, {
           profile: body.patch || {},
           changedFields: Object.keys(body.patch || {}),
           warnings: [`LLM extraction fallback: ${error instanceof Error ? error.message : "unknown error"}`],
@@ -442,7 +456,7 @@ const server = http.createServer(async (req, res) => {
         return;
       }
     }
-    sendJson(res, 200, {
+    sendJson(req, res, 200, {
       profile: body.patch || {},
       changedFields: Object.keys(body.patch || {}),
       warnings: [],
@@ -452,7 +466,7 @@ const server = http.createServer(async (req, res) => {
 
   if (req.method === "GET" && url.pathname === "/weather") {
     const place = body?.place || {};
-    sendJson(res, 200, {
+    sendJson(req, res, 200, {
       place,
       weather: {
         temperature: 29,
@@ -472,23 +486,23 @@ const server = http.createServer(async (req, res) => {
 
   if (req.method === "POST" && url.pathname === "/agent/events") {
     if (!requireSession(req, res, body?.userId || "")) return;
-    sendJson(res, 200, await persistenceRepository.appendAgentEvents(body.userId, Array.isArray(body.events) ? body.events : []));
+    sendJson(req, res, 200, await persistenceRepository.appendAgentEvents(body.userId, Array.isArray(body.events) ? body.events : []));
     return;
   }
 
   if (req.method === "POST" && url.pathname === "/persistence/sync") {
     if (!requireSession(req, res, body?.userId || body?.profile?.email || "")) return;
-    sendJson(res, 200, await persistenceRepository.syncPersistence(body));
+    sendJson(req, res, 200, await persistenceRepository.syncPersistence(body));
     return;
   }
 
   if (req.method === "GET" && url.pathname === "/admin/analytics") {
     if (!requireSession(req, res, body?.adminUserId || "", { adminOnly: true })) return;
-    sendJson(res, 200, await persistenceRepository.getAdminAnalytics());
+    sendJson(req, res, 200, await persistenceRepository.getAdminAnalytics());
     return;
   }
 
-  sendJson(res, 404, {
+  sendJson(req, res, 404, {
     error: {
       code: "NOT_FOUND",
       message: "Unknown MagerLife mock API route",

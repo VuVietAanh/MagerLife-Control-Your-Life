@@ -19,6 +19,20 @@ The repo already ignores those files.
 
 ## 2. Run locally with Docker
 
+Copy the docker env template first:
+
+```bash
+cp .env.docker.example .env.docker
+```
+
+Then run:
+
+```bash
+docker-compose up --build
+```
+
+If your machine has the newer Docker Compose plugin, this also works:
+
 ```bash
 docker compose up --build
 ```
@@ -35,7 +49,7 @@ API health:
 http://localhost:8787/health
 ```
 
-Default docker admin bootstrap email:
+Default docker admin bootstrap email from `.env.docker.example`:
 
 ```text
 admin@magerlife.local
