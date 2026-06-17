@@ -37,7 +37,7 @@ import {
   X,
   Zap
 } from "lucide-react";
-import type React from "react";
+import React from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { getMealDecisionModelInfo, mealActionLabel, rankMealActions, type MealAction, type MealDecisionContext } from "./agent/mealDecisionModel";
 import type { AuthDecorMode } from "./authDecorConfig";
