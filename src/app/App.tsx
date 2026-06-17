@@ -84,6 +84,19 @@ type Tab = "dashboard" | "finance" | "onboarding" | "account" | "admin" | "brain
 
 const foodServingUnits = FOOD_SERVING_UNITS;
 
+function getNavigationTabs(profile: UserProfile | null): Array<{ id: Tab; label: string; icon: React.ElementType }> {
+  return [
+    { id: "dashboard", label: "Dashboard", icon: Gauge },
+    { id: "finance", label: "Hũ", icon: Wallet },
+    { id: "onboarding", label: "Bổ sung dữ liệu", icon: MessageSquare },
+    { id: "account", label: "Tài khoản", icon: Settings },
+    ...(profile?.role === "admin" ? [{ id: "admin" as Tab, label: "Admin", icon: Gauge }] : []),
+    { id: "food-admin", label: "Kho món", icon: Database },
+    { id: "brain", label: "My Brain", icon: Shield },
+    { id: "routing", label: "Routing", icon: Route },
+  ];
+}
+
 type ViewErrorBoundaryProps = {
   children: React.ReactNode;
   fallbackTitle: string;
@@ -2076,16 +2089,7 @@ function Header({ tab, setTab, profile }: { tab: Tab; setTab: (tab: Tab) => void
     status: "checking" | "online" | "offline";
     label: string;
   }>({ status: "checking", label: "API..." });
-  const tabs: Array<{ id: Tab; label: string; icon: React.ElementType }> = [
-    { id: "dashboard", label: "Dashboard", icon: Gauge },
-    { id: "finance", label: "Hũ", icon: Wallet },
-    { id: "onboarding", label: "Bổ sung dữ liệu", icon: MessageSquare },
-    { id: "account", label: "Tài khoản", icon: Settings },
-    ...(profile?.role === "admin" ? [{ id: "admin" as Tab, label: "Admin", icon: Gauge }] : []),
-    { id: "food-admin", label: "Kho món", icon: Database },
-    { id: "brain", label: "My Brain", icon: Shield },
-    { id: "routing", label: "Routing", icon: Route },
-  ];
+  const tabs = getNavigationTabs(profile);
 
   async function refreshApiHealth() {
     setApiHealth((prev) => ({ ...prev, status: "checking", label: "API..." }));
@@ -6396,7 +6400,7 @@ export default function App() {
         ) : (
           <>
         <Header tab={tab} setTab={setTab} profile={profile} />
-        <ViewErrorBoundary key={tab} fallbackTitle={`Không mở được mục ${tabs.find((item) => item.id === tab)?.label || tab}`} onReset={() => setTab("dashboard")}>
+        <ViewErrorBoundary key={tab} fallbackTitle={`Không mở được mục ${getNavigationTabs(profile).find((item) => item.id === tab)?.label || tab}`} onReset={() => setTab("dashboard")}>
           {tab === "dashboard" && <Dashboard jars={jars} transactions={transactions} profile={profile} currency={currency} adminFoodLibrary={adminFoodLibrary} onProfileUpdate={updateProfileFromConversation} />}
           {tab === "finance" && <FinanceView jars={jars} setJars={setJars} transactions={transactions} setTransactions={setTransactions} salary={monthlyIncome} currency={currency} />}
           {tab === "onboarding" && <OnboardingView profile={profile} onProfileUpdate={updateProfileFromConversation} />}
