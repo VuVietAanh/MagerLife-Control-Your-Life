@@ -122,7 +122,7 @@ export function weatherSummary(code: number) {
   if ([51, 53, 55, 56, 57].includes(code)) return "Mưa phùn";
   if ([61, 63, 65, 66, 67, 80, 81, 82].includes(code)) return "Có mưa";
   if ([71, 73, 75, 77, 85, 86].includes(code)) return "Có tuyết";
-  if ([95, 96, 99].includes(code)) return "Dông";
+  if ([95, 96, 99].includes(code)) return "Giông/sấm sét";
   return "Đang cập nhật";
 }
 

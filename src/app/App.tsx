@@ -407,6 +407,23 @@ function money(value: number) {
   return `${(value / 1_000_000).toFixed(value >= 10_000_000 ? 1 : 2)}M`;
 }
 
+function safeText(value: unknown, fallback = "") {
+  if (typeof value === "string") return value;
+  if (value === null || value === undefined) return fallback;
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  if (Array.isArray(value)) return value.map((item) => safeText(item)).filter(Boolean).join(", ");
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return fallback;
+  }
+}
+
+function safeNumber(value: unknown, fallback = 0) {
+  const number = Number(String(value ?? "").replace(",", "."));
+  return Number.isFinite(number) ? number : fallback;
+}
+
 function formatCurrency(value: number, currency: MoneyCurrency = "VND") {
   const safeValue = Number.isFinite(value) ? value : 0;
   if (currency === "USD") return `$${safeValue.toLocaleString("en-US", { maximumFractionDigits: 2 })}`;
@@ -4571,37 +4588,37 @@ function OnboardingView({
   const goalGroups = profile?.goalGroups;
   const groupedGoals = goalGroups
     ? [
-        goalGroups.nutrition ? `Dinh dưỡng: ${goalGroups.nutrition}` : "",
-        goalGroups.bodyChange ? `Thay đổi cơ thể: ${goalGroups.bodyChange}` : "",
-        goalGroups.training ? `Tập luyện: ${goalGroups.training}` : "",
-        goalGroups.future ? `Tương lai: ${goalGroups.future}` : "",
+        goalGroups.nutrition ? `Dinh dưỡng: ${safeText(goalGroups.nutrition)}` : "",
+        goalGroups.bodyChange ? `Thay đổi cơ thể: ${safeText(goalGroups.bodyChange)}` : "",
+        goalGroups.training ? `Tập luyện: ${safeText(goalGroups.training)}` : "",
+        goalGroups.future ? `Tương lai: ${safeText(goalGroups.future)}` : "",
       ].filter(Boolean).join("\n")
     : "";
-  const goalSummary = groupedGoals || profile?.goalSummary || "Không có";
+  const goalSummary = groupedGoals || safeText(profile?.goalSummary, "Không có") || "Không có";
   const goalText = goalSummary.toLowerCase();
   const wantsFatLoss = goalText.includes("giảm mỡ") || goalText.includes("giảm cân");
   const wantsMuscleGain = goalText.includes("tăng cơ");
   const wantsWeightGain = goalText.includes("tăng mỡ") || goalText.includes("tăng nước") || goalText.includes("tăng cân");
-  const tdeeMatch = profile?.calorieNote?.match(/TDEE duy trì ([\d.,]+)/);
+  const tdeeMatch = safeText(profile?.calorieNote).match(/TDEE duy trì ([\d.,]+)/);
   const maintenanceKcal = tdeeMatch?.[1] ? `${tdeeMatch[1]} kcal/ngày` : "Chưa có dữ liệu";
-  const kcalDirection = profile?.kcalRecommendation || (
+  const kcalDirection = safeText(profile?.kcalRecommendation) || (
     wantsFatLoss
       ? "Giảm nhẹ 100 - 300kcal/ngày so với TDEE"
       : wantsWeightGain
         ? "Tăng nhẹ 200 - 300kcal/ngày so với TDEE"
         : "Ăn gần TDEE duy trì"
   );
-  const systemSuggestion = profile?.systemSuggestion || kcalDirection || "Không có";
-  const supportStyle = profile?.supportStyle || "Không có";
+  const systemSuggestion = safeText(profile?.systemSuggestion) || kcalDirection || "Không có";
+  const supportStyle = safeText(profile?.supportStyle, "Không có") || "Không có";
   const goalCards = goalGroups
     ? [
-        goalGroups.nutrition ? { label: "Dinh dưỡng", value: goalGroups.nutrition } : null,
-        goalGroups.bodyChange ? { label: "Thay đổi cơ thể", value: goalGroups.bodyChange } : null,
-        goalGroups.training ? { label: "Tập luyện", value: goalGroups.training } : null,
-        goalGroups.future ? { label: "Tương lai", value: goalGroups.future } : null,
+        goalGroups.nutrition ? { label: "Dinh dưỡng", value: safeText(goalGroups.nutrition) } : null,
+        goalGroups.bodyChange ? { label: "Thay đổi cơ thể", value: safeText(goalGroups.bodyChange) } : null,
+        goalGroups.training ? { label: "Tập luyện", value: safeText(goalGroups.training) } : null,
+        goalGroups.future ? { label: "Tương lai", value: safeText(goalGroups.future) } : null,
       ].filter(Boolean) as Array<{ label: string; value: string }>
     : profile?.goalSummary
-      ? [{ label: "Đã chọn", value: profile.goalSummary }]
+      ? [{ label: "Đã chọn", value: safeText(profile.goalSummary) }]
       : [];
   const suggestionCards = [
     wantsFatLoss ? { label: "Giảm mỡ", value: kcalDirection } : null,
@@ -4613,9 +4630,9 @@ function OnboardingView({
   ].filter(Boolean) as Array<{ label: string; value: string }>;
   const goalListItems = goalCards.flatMap((item) => splitListText(item.value));
   const steps = [
-    { q: "Bạn muốn MagerLife ưu tiên điều gì nhất?", a: profile?.currentPriority || "Chưa chọn ưu tiên số 1." },
-    { q: "Thu nhập?", a: profile?.salary ? `${formatCurrency(profile.salary, profile.currency || "VND")}/tháng` : "Chưa cập nhật lương." },
-    { q: "Chỉ số sức khỏe chính?", a: `${age ? `${age} tuổi - ` : ""}${profile?.weight || "?"}kg - ${profile?.height || "?"}cm.` },
+    { q: "Bạn muốn MagerLife ưu tiên điều gì nhất?", a: safeText(profile?.currentPriority, "Chưa chọn ưu tiên số 1.") || "Chưa chọn ưu tiên số 1." },
+    { q: "Thu nhập?", a: safeNumber(profile?.salary) > 0 ? `${formatCurrency(safeNumber(profile?.salary), profile?.currency || "VND")}/tháng` : "Chưa cập nhật lương." },
+    { q: "Chỉ số sức khỏe chính?", a: `${age ? `${age} tuổi - ` : ""}${safeText(profile?.weight, "?") || "?"}kg - ${safeText(profile?.height, "?") || "?"}cm.` },
     { q: "Mục tiêu?", a: goalSummary, type: "goals" },
     { q: "Kcal duy trì?", a: maintenanceKcal },
     { q: "Hệ thống đề xuất?", a: systemSuggestion, type: "suggestions" },
@@ -4624,7 +4641,7 @@ function OnboardingView({
   const extractedStates = [
     {
       label: "Thu nhập",
-      value: profile?.salary ? formatCurrency(profile.salary, profile.currency || "VND") : "Chưa có",
+      value: safeNumber(profile?.salary) > 0 ? formatCurrency(safeNumber(profile?.salary), profile?.currency || "VND") : "Chưa có",
       confidence: "92%",
       note: "Dùng để chia hũ, dự báo dòng tiền và giới hạn ngân sách ăn uống.",
     },
@@ -4642,7 +4659,7 @@ function OnboardingView({
     },
     {
       label: "Nhạy cảm ngân sách ăn uống",
-      value: profile?.budgetStyle || "Chưa rõ",
+      value: safeText(profile?.budgetStyle, "Chưa rõ") || "Chưa rõ",
       confidence: "81%",
       note: "Dùng để chọn món ăn, meal prep và cảnh báo khi ăn ngoài quá nhiều.",
     },
@@ -4667,7 +4684,7 @@ function OnboardingView({
   }
 
   function splitListText(value: string) {
-    return value
+    return safeText(value)
       .split(",")
       .map((item) => item.trim())
       .filter(Boolean);
