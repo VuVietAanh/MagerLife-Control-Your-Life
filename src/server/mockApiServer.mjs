@@ -101,6 +101,28 @@ function validMealName(meal = "") {
   return ["Sáng", "Trưa", "Tối", "Phụ"].includes(meal);
 }
 
+function normalizeMealName(meal = "") {
+  const value = String(meal).trim();
+  const normalized = value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/đ/g, "d")
+    .replace(/Đ/g, "D")
+    .toLowerCase();
+  if (["sang", "s?ng"].includes(normalized)) return "Sáng";
+  if (["trua", "tr?a"].includes(normalized)) return "Trưa";
+  if (["toi", "t?i"].includes(normalized)) return "Tối";
+  if (["phu", "ph?"].includes(normalized)) return "Phụ";
+  return value;
+}
+
+function normalizeNutritionMealLog(mealLog = {}) {
+  return {
+    ...mealLog,
+    meal: normalizeMealName(mealLog.meal),
+  };
+}
+
 function validateAuthRegister(body = {}) {
   if (!isValidEmail(body.email)) return "Email không hợp lệ.";
   if (!isStrongPassword(body.password)) return "Mật khẩu phải dài hơn 8 ký tự, có chữ hoa, số và ký tự đặc biệt.";
@@ -114,7 +136,7 @@ function validateAuthLogin(body = {}) {
 }
 
 function validateNutritionLog(body = {}) {
-  const mealLog = parseMaybeJson(body.mealLog, {});
+  const mealLog = normalizeNutritionMealLog(parseMaybeJson(body.mealLog, {}));
   if (!body.userId || !isValidEmail(body.userId)) return "userId không hợp lệ.";
   if (!mealLog.id || !validMealName(mealLog.meal) || !mealLog.name) return "Meal log thiếu id, bữa hoặc tên món.";
   if (!Number.isFinite(Number(mealLog.kcal)) || Number(mealLog.kcal) < 0) return "kcal không hợp lệ.";
@@ -454,7 +476,7 @@ export async function handleMagerLifeApiRequest(req, res) {
 
   if (req.method === "POST" && url.pathname === "/nutrition/log") {
     if (!requireSession(req, res, body?.userId || "")) return;
-    const normalizedBody = { ...body, mealLog: parseMaybeJson(body?.mealLog, {}) };
+    const normalizedBody = { ...body, mealLog: normalizeNutritionMealLog(parseMaybeJson(body?.mealLog, {})) };
     const validationError = validateNutritionLog(body);
     if (validationError) {
       sendValidationError(req, res, validationError, {
