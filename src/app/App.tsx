@@ -4635,12 +4635,19 @@ function FinanceView({
 function OnboardingView({
   profile,
   onProfileUpdate,
+  jars,
+  transactions,
+  currency,
 }: {
   profile: UserProfile | null;
   onProfileUpdate: (patch: Partial<UserProfile>, sourceText: string) => void;
+  jars: Jar[];
+  transactions: Transaction[];
+  currency: MoneyCurrency;
 }) {
   const [profileInput, setProfileInput] = useState("");
   const [lastUpdate, setLastUpdate] = useState<string[]>([]);
+  const insights = buildDashboardInsights(profile, jars, transactions, currency);
   const age = profile?.birthday ? Math.max(0, new Date().getFullYear() - new Date(profile.birthday).getFullYear()) : 0;
   const goalGroups = profile?.goalGroups;
   const groupedGoals = goalGroups
@@ -6403,7 +6410,7 @@ export default function App() {
         <ViewErrorBoundary key={tab} fallbackTitle={`Không mở được mục ${getNavigationTabs(profile).find((item) => item.id === tab)?.label || tab}`} onReset={() => setTab("dashboard")}>
           {tab === "dashboard" && <Dashboard jars={jars} transactions={transactions} profile={profile} currency={currency} adminFoodLibrary={adminFoodLibrary} onProfileUpdate={updateProfileFromConversation} />}
           {tab === "finance" && <FinanceView jars={jars} setJars={setJars} transactions={transactions} setTransactions={setTransactions} salary={monthlyIncome} currency={currency} />}
-          {tab === "onboarding" && <OnboardingView profile={profile} onProfileUpdate={updateProfileFromConversation} />}
+          {tab === "onboarding" && <OnboardingView profile={profile} onProfileUpdate={updateProfileFromConversation} jars={jars} transactions={transactions} currency={currency} />}
           {tab === "account" && <AccountView profile={profile} onProfileUpdate={updateProfileFromConversation} />}
           {tab === "admin" && <AdminOverviewView profile={profile} users={adminUsers} foodLibrary={adminFoodLibrary} agentEvents={agentEvents} setTab={setTab} />}
           {tab === "food-admin" && <FoodLibraryView profile={profile} onProfileUpdate={updateProfileFromConversation} foodLibrary={adminFoodLibrary} setFoodLibrary={setAdminFoodLibrary} />}
