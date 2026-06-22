@@ -114,7 +114,7 @@ function validateAuthLogin(body = {}) {
 }
 
 function validateNutritionLog(body = {}) {
-  const mealLog = body.mealLog || {};
+  const mealLog = parseMaybeJson(body.mealLog, {});
   if (!body.userId || !isValidEmail(body.userId)) return "userId không hợp lệ.";
   if (!mealLog.id || !validMealName(mealLog.meal) || !mealLog.name) return "Meal log thiếu id, bữa hoặc tên món.";
   if (!Number.isFinite(Number(mealLog.kcal)) || Number(mealLog.kcal) < 0) return "kcal không hợp lệ.";
@@ -222,6 +222,15 @@ function readGetPayload(url) {
     return JSON.parse(payload);
   } catch {
     return {};
+  }
+}
+
+function parseMaybeJson(value, fallback = {}) {
+  if (typeof value !== "string") return value ?? fallback;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return fallback;
   }
 }
 
@@ -445,12 +454,19 @@ export async function handleMagerLifeApiRequest(req, res) {
 
   if (req.method === "POST" && url.pathname === "/nutrition/log") {
     if (!requireSession(req, res, body?.userId || "")) return;
+    const normalizedBody = { ...body, mealLog: parseMaybeJson(body?.mealLog, {}) };
     const validationError = validateNutritionLog(body);
     if (validationError) {
-      sendValidationError(req, res, validationError);
+      sendValidationError(req, res, validationError, {
+        hasUserId: Boolean(body?.userId),
+        mealLogKeys: Object.keys(normalizedBody.mealLog || {}),
+        meal: normalizedBody.mealLog?.meal,
+        hasName: Boolean(normalizedBody.mealLog?.name),
+        hasKcal: normalizedBody.mealLog?.kcal !== undefined,
+      });
       return;
     }
-    sendRepositoryResult(req, res, await persistenceRepository.logNutritionMeal(body));
+    sendRepositoryResult(req, res, await persistenceRepository.logNutritionMeal(normalizedBody));
     return;
   }
 
