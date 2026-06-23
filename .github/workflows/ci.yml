@@ -25,6 +25,9 @@ jobs:
       - name: Build frontend
         run: npm run build
 
+      - name: Check deploy config
+        run: npm run check:deploy
+
       - name: Check server syntax
         run: |
           node --check src/server/mockApiServer.mjs

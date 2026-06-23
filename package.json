@@ -8,6 +8,7 @@
     "dev": "vite",
     "api:mock": "node src/server/mockApiServer.mjs",
     "api:server": "node src/server/mockApiServer.mjs",
+    "check:deploy": "node scripts/check-deploy-config.mjs",
     "smoke:production": "node scripts/smoke-production.mjs"
   },
   "dependencies": {
