@@ -62,6 +62,7 @@ Use an email listed in `MAGERLIFE_ADMIN_EMAILS`, then register normally in the a
 After Vercel deploys, test:
 
 - `https://your-vercel-domain.vercel.app/api/health`
+- `https://your-vercel-domain.vercel.app/api/health/db`
 - register new account
 - login again
 - complete onboarding
@@ -69,6 +70,18 @@ After Vercel deploys, test:
 - log nutrition from chat/manual flow
 - open Admin tab with the admin email
 - check mobile layout
+
+You can also run the production smoke script:
+
+```bash
+npm run smoke:production
+```
+
+For a different Vercel domain:
+
+```bash
+MAGERLIFE_SMOKE_API_BASE_URL=https://your-vercel-domain.vercel.app/api npm run smoke:production
+```
 
 ## Notes
 

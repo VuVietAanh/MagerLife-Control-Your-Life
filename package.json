@@ -7,7 +7,8 @@
     "build": "vite build",
     "dev": "vite",
     "api:mock": "node src/server/mockApiServer.mjs",
-    "api:server": "node src/server/mockApiServer.mjs"
+    "api:server": "node src/server/mockApiServer.mjs",
+    "smoke:production": "node scripts/smoke-production.mjs"
   },
   "dependencies": {
     "lucide-react": "0.487.0",
