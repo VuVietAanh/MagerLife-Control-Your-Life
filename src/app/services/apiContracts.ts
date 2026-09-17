@@ -15,6 +15,16 @@ export type ApiResult<TData> = {
   };
 };
 
+// Gửi kèm theo request khi user tự cấu hình provider/API key riêng ở Settings.
+// Server dùng override này thay cho GROQ_API_KEY/... mặc định trong .env nếu có.
+// Không dùng cho "ollama" vì đó luôn được gọi thẳng từ client (xem aiProviderService.ts).
+export type AiOverride = {
+  provider: "groq" | "openai" | "xai";
+  apiKey?: string;
+  model?: string;
+  baseUrl?: string;
+};
+
 export type AuthRegisterRequest = {
   email: string;
   password: string;
@@ -59,6 +69,7 @@ export type ChatTurnRequest = {
     activeTab: string;
     localTime: string;
   };
+  aiOverride?: AiOverride;
 };
 
 export type ChatTurnResponse = {
@@ -78,6 +89,7 @@ export type ResolveFoodRequest = {
   profile?: UserProfile;
   userFoodLibrary?: FoodLibraryItem[];
   adminFoodLibraryVersion?: string;
+  aiOverride?: AiOverride;
 };
 
 export type ResolveFoodResponse = {
@@ -152,6 +164,7 @@ export type ProfileUpdateRequest = {
   patch: Partial<UserProfile>;
   sourceText: string;
   profile?: UserProfile;
+  aiOverride?: AiOverride;
 };
 
 export type ProfileUpdateResponse = {

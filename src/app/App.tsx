@@ -17,6 +17,7 @@ import {
   Heart,
   Info,
   Lock,
+  LogOut,
   MapPin,
   MessageSquare,
   Moon,
@@ -44,10 +45,19 @@ import type { AuthDecorMode } from "./authDecorConfig";
 import type { Memory, Message } from "./models/agent";
 import type { Jar, MoneyCurrency, Transaction } from "./models/finance";
 import type { NutritionMealLog, NutritionMealName, NutritionTrackingMode } from "./models/nutrition";
-import type { SubscriptionPlan, UserProfile } from "./models/profile";
+import type { AiProviderKey, AiSettings, SubscriptionPlan, UserProfile } from "./models/profile";
 import { SeasonalDecor } from "./SeasonalDecor";
 import { appendAgentEvent, classifyProfileUpdateEvent, loadAgentEvents, type AgentEvent } from "./services/agentEventService";
 import { buildAgentDecisionLogs } from "./services/agentDecisionService";
+import {
+  AI_PROVIDER_PRESETS,
+  answerChatWithLocalAi,
+  extractProfilePatchWithLocalAi,
+  isLocalAiProvider,
+  resolveAiOverride,
+  sanitizeProfileForSync,
+  testAiConnection,
+} from "./services/aiProviderService";
 import type { AdminAnalyticsResponse } from "./services/apiContracts";
 import { getAuthAccount, saveAuthAccount } from "./services/authAccountService";
 import { saveAuthSessionToken } from "./services/authSessionService";
@@ -2083,7 +2093,7 @@ function AuthFlow({ onComplete }: { onComplete: (profile: UserProfile) => void }
   );
 }
 
-function Header({ tab, setTab, profile }: { tab: Tab; setTab: (tab: Tab) => void; profile: UserProfile | null }) {
+function Header({ tab, setTab, profile, onLogout }: { tab: Tab; setTab: (tab: Tab) => void; profile: UserProfile | null; onLogout: () => void }) {
   const foodTabNeedsPro = profile?.role !== "admin" && profile?.subscriptionPlan !== "pro";
   const [apiHealth, setApiHealth] = useState<{
     status: "checking" | "online" | "offline";
@@ -2155,6 +2165,15 @@ function Header({ tab, setTab, profile }: { tab: Tab; setTab: (tab: Tab) => void
           <span className={`h-2 w-2 rounded-full ${apiHealth.status === "online" ? "bg-emerald-500" : apiHealth.status === "offline" ? "bg-rose-500" : "bg-amber-400"}`} />
           <Bot className="h-3.5 w-3.5" />
           {apiHealth.label}
+        </button>
+        <button
+          type="button"
+          onClick={onLogout}
+          className="flex h-9 items-center gap-2 rounded-lg border border-slate-200 bg-white/70 px-3 text-xs font-black text-slate-600 transition hover:border-rose-200 hover:bg-rose-50 hover:text-rose-700"
+          title="Đăng xuất"
+        >
+          <LogOut className="h-3.5 w-3.5" />
+          Đăng xuất
         </button>
       </div>
     </header>
@@ -2398,22 +2417,40 @@ function MealRecommendation({
   async function requestApiMealAdvice() {
     setApiMealAdviceStatus("loading");
     setApiMealAdvice("");
-    const result = await sendChatTurnToApi({
-      text: [
-        "Hãy gợi ý món ăn thực tế cho hôm nay.",
-        `Ngân sách ăn hôm nay: ${formatCurrency(insights.foodTodayCap, currency)}.`,
-        `Kcal còn lại: ${insights.remainingKcalToday}/${insights.dailyKcalTarget} kcal.`,
-        `Chế độ/ưu tiên: ${insights.needsHighProtein ? "ưu tiên protein cao" : "cân bằng"}, ${insights.prefersMealPrep ? "meal prep/tiết kiệm" : "ăn thường ngày"}.`,
-        "Không gợi ý món vượt ngân sách. Nếu ngân sách dưới 30.000 VNĐ thì không gợi ý phở/bún/cơm phần mua ngoài.",
-      ].join(" "),
-      profile,
-      currency,
-      activeTab: "meal_recommendation",
-    });
-    if (result.ok && result.data?.message) {
-      setApiMealAdvice(result.data.message);
-      setApiMealAdviceStatus("idle");
-      return;
+    const text = [
+      "Hãy gợi ý món ăn thực tế cho hôm nay.",
+      `Ngân sách ăn hôm nay: ${formatCurrency(insights.foodTodayCap, currency)}.`,
+      `Kcal còn lại: ${insights.remainingKcalToday}/${insights.dailyKcalTarget} kcal.`,
+      `Chế độ/ưu tiên: ${insights.needsHighProtein ? "ưu tiên protein cao" : "cân bằng"}, ${insights.prefersMealPrep ? "meal prep/tiết kiệm" : "ăn thường ngày"}.`,
+      "Không gợi ý món vượt ngân sách. Nếu ngân sách dưới 30.000 VNĐ thì không gợi ý phở/bún/cơm phần mua ngoài.",
+    ].join(" ");
+    const aiSettings = profile?.aiSettings;
+    try {
+      if (aiSettings && isLocalAiProvider(aiSettings.provider)) {
+        const local = await answerChatWithLocalAi({
+          text,
+          profile,
+          clientContext: { currency, activeTab: "meal_recommendation", localTime: new Date().toISOString() },
+          aiSettings,
+        });
+        setApiMealAdvice(local.message);
+        setApiMealAdviceStatus("idle");
+        return;
+      }
+      const result = await sendChatTurnToApi({
+        text,
+        profile,
+        currency,
+        activeTab: "meal_recommendation",
+        aiOverride: resolveAiOverride(aiSettings),
+      });
+      if (result.ok && result.data?.message) {
+        setApiMealAdvice(result.data.message);
+        setApiMealAdviceStatus("idle");
+        return;
+      }
+    } catch {
+      // rơi xuống thông báo lỗi bên dưới.
     }
     setApiMealAdviceStatus("error");
     setApiMealAdvice("Chưa gọi được API gợi ý món. Hãy kiểm tra API server hoặc dùng gợi ý local tạm thời.");
@@ -3737,15 +3774,33 @@ function ChatPanel({
     }
     const shouldTryApi = !result.profilePatch && result.aiText.includes("sau đó mới gọi LLM");
     if (shouldTryApi) {
-      const apiResult = await sendChatTurnToApi({
-        text,
-        profile,
-        currency,
-      });
-      if (apiResult.ok && apiResult.data?.message) {
-        finalText = apiResult.data.message;
-        finalPatch = apiResult.data.profilePatch as Partial<UserProfile> | undefined;
-        finalSourceText = `Chat API/LLM: ${text}`;
+      const aiSettings = profile?.aiSettings;
+      try {
+        if (aiSettings && isLocalAiProvider(aiSettings.provider)) {
+          const local = await answerChatWithLocalAi({
+            text,
+            profile,
+            clientContext: { currency, activeTab: "dashboard", localTime: new Date().toISOString() },
+            aiSettings,
+          });
+          finalText = local.message;
+          finalPatch = local.profilePatch as Partial<UserProfile> | undefined;
+          finalSourceText = `Chat API/LLM (Ollama local): ${text}`;
+        } else {
+          const apiResult = await sendChatTurnToApi({
+            text,
+            profile,
+            currency,
+            aiOverride: resolveAiOverride(aiSettings),
+          });
+          if (apiResult.ok && apiResult.data?.message) {
+            finalText = apiResult.data.message;
+            finalPatch = apiResult.data.profilePatch as Partial<UserProfile> | undefined;
+            finalSourceText = `Chat API/LLM: ${text}`;
+          }
+        }
+      } catch {
+        // giữ nguyên finalText từ rule local nếu gọi AI lỗi.
       }
     }
     if (finalPatch && Object.keys(finalPatch).length > 0) {
@@ -6069,7 +6124,193 @@ function AccountView({
           </p>
         </Glass>
       </div>
+      <div className="xl:col-span-2">
+        <AiSettingsCard profile={profile} onProfileUpdate={onProfileUpdate} />
+      </div>
     </main>
+  );
+}
+
+function AiSettingsCard({
+  profile,
+  onProfileUpdate,
+}: {
+  profile: UserProfile | null;
+  onProfileUpdate: (patch: Partial<UserProfile>, sourceText: string) => void;
+}) {
+  const savedSettings = profile?.aiSettings;
+  const [draft, setDraft] = useState<AiSettings>({
+    provider: savedSettings?.provider || "mock",
+    apiKey: savedSettings?.apiKey || "",
+    model: savedSettings?.model || "",
+    baseUrl: savedSettings?.baseUrl || "",
+  });
+  const [showKey, setShowKey] = useState(false);
+  const [testStatus, setTestStatus] = useState<"idle" | "testing" | "ok" | "error">("idle");
+  const [testMessage, setTestMessage] = useState("");
+  const [savedText, setSavedText] = useState("");
+
+  useEffect(() => {
+    setDraft({
+      provider: savedSettings?.provider || "mock",
+      apiKey: savedSettings?.apiKey || "",
+      model: savedSettings?.model || "",
+      baseUrl: savedSettings?.baseUrl || "",
+    });
+    setTestStatus("idle");
+    setTestMessage("");
+  }, [profile?.email]);
+
+  const preset = AI_PROVIDER_PRESETS[draft.provider];
+
+  function patchDraft(key: "apiKey" | "model" | "baseUrl", value: string) {
+    setTestStatus("idle");
+    setDraft((prev) => ({ ...prev, [key]: value }));
+  }
+
+  function selectProvider(nextProvider: AiProviderKey) {
+    setTestStatus("idle");
+    setDraft({ provider: nextProvider, apiKey: "", model: "", baseUrl: "" });
+  }
+
+  async function handleTestConnection() {
+    setTestStatus("testing");
+    setTestMessage("");
+    const result = await testAiConnection(draft);
+    setTestStatus(result.ok ? "ok" : "error");
+    setTestMessage(result.message);
+  }
+
+  function saveAiSettings() {
+    onProfileUpdate(
+      {
+        aiSettings: {
+          provider: draft.provider,
+          apiKey: draft.apiKey?.trim() || undefined,
+          model: draft.model?.trim() || undefined,
+          baseUrl: draft.baseUrl?.trim() || undefined,
+        },
+      },
+      `Người dùng cập nhật cấu hình Trợ lý AI (provider=${draft.provider}).`
+    );
+    setSavedText("Đã lưu cấu hình AI. Key chỉ được lưu trên máy này, không gửi lên kho dữ liệu dùng chung.");
+  }
+
+  return (
+    <Glass className="p-5">
+      <div className="mb-5 flex items-start justify-between gap-4">
+        <div>
+          <Mono className="text-emerald-700">AI Settings</Mono>
+          <h2 className="mt-1 text-xl font-black text-slate-900">Trợ lý AI</h2>
+          <p className="mt-1 text-sm leading-relaxed text-slate-500">
+            Chọn model xử lý chat/gợi ý món ăn. Key API được lưu riêng trên máy bạn, không đưa vào kho dữ liệu dùng chung với người khác.
+          </p>
+        </div>
+        <Bot className="h-5 w-5 text-emerald-500" />
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
+        {(Object.keys(AI_PROVIDER_PRESETS) as AiProviderKey[]).map((key) => {
+          const option = AI_PROVIDER_PRESETS[key];
+          const active = draft.provider === key;
+          return (
+            <button
+              key={key}
+              type="button"
+              onClick={() => selectProvider(key)}
+              className={`text-left rounded-2xl border p-3 transition ${
+                active ? "border-emerald-400 bg-emerald-50/70 ring-2 ring-emerald-200" : "border-slate-200 bg-white hover:border-emerald-200"
+              }`}
+            >
+              <p className="text-sm font-black text-slate-900">{option.label}</p>
+              <p className="mt-1 text-xs leading-relaxed text-slate-500">{option.freeNote}</p>
+            </button>
+          );
+        })}
+      </div>
+
+      {preset.guideSteps.length > 0 && (
+        <div className="mb-4 rounded-2xl border border-sky-100 bg-sky-50/60 p-3">
+          <p className="text-xs font-black uppercase tracking-wide text-sky-700">Cách lấy / cài đặt</p>
+          <ol className="mt-2 space-y-1 text-sm text-slate-700 list-decimal list-inside">
+            {preset.guideSteps.map((step) => (
+              <li key={step}>{step}</li>
+            ))}
+          </ol>
+          {preset.guideUrl && (
+            <a href={preset.guideUrl} target="_blank" rel="noreferrer" className="mt-2 inline-block text-xs font-bold text-sky-700 underline">
+              {preset.guideUrl}
+            </a>
+          )}
+        </div>
+      )}
+
+      {draft.provider !== "mock" && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {preset.needsApiKey && (
+            <label className="space-y-1.5 md:col-span-2">
+              <span className="text-xs font-bold text-slate-500">API key</span>
+              <div className="flex gap-2">
+                <input
+                  type={showKey ? "text" : "password"}
+                  value={draft.apiKey || ""}
+                  onChange={(event) => patchDraft("apiKey", event.target.value)}
+                  placeholder="Dán API key của bạn vào đây"
+                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm outline-none focus:border-emerald-400"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowKey((prev) => !prev)}
+                  className="shrink-0 rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-500 hover:bg-slate-50"
+                >
+                  {showKey ? "Ẩn" : "Hiện"}
+                </button>
+              </div>
+            </label>
+          )}
+          <label className="space-y-1.5">
+            <span className="text-xs font-bold text-slate-500">Model</span>
+            <input
+              value={draft.model || ""}
+              onChange={(event) => patchDraft("model", event.target.value)}
+              placeholder={preset.defaultModel}
+              className="w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm outline-none focus:border-emerald-400"
+            />
+          </label>
+          <label className="space-y-1.5">
+            <span className="text-xs font-bold text-slate-500">Base URL (nâng cao)</span>
+            <input
+              value={draft.baseUrl || ""}
+              onChange={(event) => patchDraft("baseUrl", event.target.value)}
+              placeholder={preset.defaultBaseUrl}
+              className="w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm outline-none focus:border-emerald-400"
+            />
+          </label>
+        </div>
+      )}
+
+      {testMessage && (
+        <p className={`mt-4 rounded-xl border px-3 py-2 text-sm font-bold ${testStatus === "ok" ? "border-emerald-100 bg-emerald-50 text-emerald-700" : "border-amber-100 bg-amber-50 text-amber-700"}`}>
+          {testMessage}
+        </p>
+      )}
+      {savedText && <p className="mt-3 rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-700">{savedText}</p>}
+
+      <div className="mt-5 flex flex-wrap justify-end gap-2">
+        {draft.provider !== "mock" && (
+          <button
+            onClick={handleTestConnection}
+            disabled={testStatus === "testing"}
+            className="rounded-xl border border-slate-200 bg-white px-5 py-3 text-sm font-black text-slate-700 transition hover:bg-slate-50 disabled:opacity-50"
+          >
+            {testStatus === "testing" ? "Đang kiểm tra..." : "Kiểm tra kết nối"}
+          </button>
+        )}
+        <button onClick={saveAiSettings} className="rounded-xl bg-slate-900 px-5 py-3 text-sm font-black text-white shadow-lg shadow-slate-200 transition hover:bg-slate-800">
+          Lưu cấu hình AI
+        </button>
+      </div>
+    </Glass>
   );
 }
 
@@ -6172,6 +6413,7 @@ function shouldEnrichProfileWithApi(sourceText: string, patch: Partial<UserProfi
   if (normalized.startsWith("sửa nhật ký ăn uống:")) return false;
   if (normalized.startsWith("xóa nhật ký ăn uống:")) return false;
   if (patch.nutritionMeals || patch.pendingNutritionApiRequests || patch.customFoodItems || patch.mealPlanSlots) return false;
+  if (patch.aiSettings) return false;
   return sourceText.length >= 16;
 }
 
@@ -6318,7 +6560,7 @@ export default function App() {
     saveAuthAccount<UserProfile>(nextProfile.email, nextProfile);
     void saveProfileToApi({
       userId: nextProfile.email,
-      patch: nextProfile,
+      patch: sanitizeProfileForSync(nextProfile),
     });
     if (patch.nutritionMeals?.length) {
       const previousMeals = baseProfile.nutritionMeals || [];
@@ -6349,13 +6591,7 @@ export default function App() {
       },
     });
     if (shouldEnrichProfileWithApi(sourceText, patch)) {
-      void updateProfileViaApi({
-        profile: nextProfile,
-        patch,
-        sourceText,
-      }).then((result) => {
-        if (!result.ok || !result.data?.profile) return;
-        const apiPatch = result.data.profile;
+      const applyProfileEnrichment = (apiPatch: Partial<UserProfile>, warnings: string[]) => {
         const apiChangedFields = Object.keys(apiPatch).filter((key) => JSON.stringify(apiPatch[key as keyof UserProfile]) !== JSON.stringify(nextProfile[key as keyof UserProfile]));
         if (!apiChangedFields.length) return;
         setProfile((current) => {
@@ -6364,7 +6600,7 @@ export default function App() {
           saveAuthAccount<UserProfile>(enrichedProfile.email, enrichedProfile);
           void saveProfileToApi({
             userId: enrichedProfile.email,
-            patch: enrichedProfile,
+            patch: sanitizeProfileForSync(enrichedProfile),
           });
           if (apiPatch.nutritionMeals?.length) {
             apiPatch.nutritionMeals.forEach((mealLog) => {
@@ -6392,11 +6628,38 @@ export default function App() {
           payload: {
             changedFields: apiChangedFields,
             patch: apiPatch,
-            warnings: result.data?.warnings || [],
+            warnings,
           },
         });
-      });
+      };
+
+      const aiSettings = nextProfile.aiSettings;
+      if (aiSettings && isLocalAiProvider(aiSettings.provider)) {
+        void extractProfilePatchWithLocalAi({ patch, sourceText, currentProfile: nextProfile, aiSettings })
+          .then((extraction) => applyProfileEnrichment(extraction.patch, extraction.warnings))
+          .catch(() => {});
+      } else {
+        void updateProfileViaApi({
+          profile: sanitizeProfileForSync(nextProfile),
+          patch,
+          sourceText,
+          aiOverride: resolveAiOverride(aiSettings),
+        }).then((result) => {
+          if (!result.ok || !result.data?.profile) return;
+          applyProfileEnrichment(result.data.profile, result.data.warnings || []);
+        });
+      }
     }
+  }
+
+  function handleLogout() {
+    setIsAuthenticated(false);
+    setProfile(null);
+    setJars(initialJars);
+    setTransactions(initialTransactions);
+    setMemories(initialMemories);
+    setTab("dashboard");
+    financeApiReadyRef.current = false;
   }
 
   return (
@@ -6406,7 +6669,7 @@ export default function App() {
           <AuthFlow onComplete={completeAuth} />
         ) : (
           <>
-        <Header tab={tab} setTab={setTab} profile={profile} />
+        <Header tab={tab} setTab={setTab} profile={profile} onLogout={handleLogout} />
         <ViewErrorBoundary key={tab} fallbackTitle={`Không mở được mục ${getNavigationTabs(profile).find((item) => item.id === tab)?.label || tab}`} onReset={() => setTab("dashboard")}>
           {tab === "dashboard" && <Dashboard jars={jars} transactions={transactions} profile={profile} currency={currency} adminFoodLibrary={adminFoodLibrary} onProfileUpdate={updateProfileFromConversation} />}
           {tab === "finance" && <FinanceView jars={jars} setJars={setJars} transactions={transactions} setTransactions={setTransactions} salary={monthlyIncome} currency={currency} />}

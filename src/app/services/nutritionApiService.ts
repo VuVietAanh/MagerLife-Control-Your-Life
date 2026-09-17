@@ -1,5 +1,6 @@
 import type { ResolvedNutrition } from "./nutritionResolver";
 import { callMagerLifeApi } from "./apiClient";
+import { isLocalAiProvider, resolveAiOverride, resolveFoodWithLocalAi } from "./aiProviderService";
 import type { UserProfile } from "../models/profile";
 
 export type NutritionApiStatus = "pending" | "resolved" | "rejected";
@@ -37,15 +38,52 @@ export function createPendingNutritionApiRequest(text: string, meal: string): Nu
 }
 
 export async function resolveNutritionByApiContract(request: NutritionApiRequest, profile?: UserProfile | null): Promise<NutritionApiResolution> {
-  const apiResult = await callMagerLifeApi(
-    "POST /nutrition/resolve-food",
-    {
-      userId: "local-demo-user",
-      text: request.text,
-      meal: request.meal as "Sáng" | "Trưa" | "Tối" | "Phụ",
-      profile: profile || undefined,
+  const aiSettings = profile?.aiSettings;
+
+  // Ollama chạy trên máy chính chủ, backend chung (Vercel...) không thể gọi tới máy đó,
+  // nên khi provider là Ollama thì gọi thẳng từ đây thay vì đi qua /nutrition/resolve-food.
+  if (aiSettings && isLocalAiProvider(aiSettings.provider)) {
+    try {
+      const localResult = await resolveFoodWithLocalAi({
+        text: request.text,
+        meal: request.meal,
+        profile,
+        aiSettings,
+      });
+      if (localResult.candidates.length) {
+        return {
+          requestId: request.id,
+          suggestions: localResult.candidates.map((candidate) => ({
+            name: candidate.name,
+            kcal: candidate.kcal,
+            carbs: candidate.carbs,
+            protein: candidate.protein,
+            fat: candidate.fat,
+            fiber: candidate.fiber,
+            confidence: candidate.confidence,
+            source: "llm_estimate",
+            note: "Ollama (local) estimate. Cần user xác nhận trước khi ghi nhật ký.",
+          })),
+          needsUserConfirmation: true,
+        };
+      }
+    } catch {
+      // rơi xuống fallback mock bên dưới nếu Ollama không gọi được.
     }
-  );
+  }
+
+  const apiResult = aiSettings && isLocalAiProvider(aiSettings.provider)
+    ? ({ ok: false, data: undefined } as const)
+    : await callMagerLifeApi(
+        "POST /nutrition/resolve-food",
+        {
+          userId: "local-demo-user",
+          text: request.text,
+          meal: request.meal as "Sáng" | "Trưa" | "Tối" | "Phụ",
+          profile: profile || undefined,
+          aiOverride: resolveAiOverride(aiSettings),
+        }
+      );
   if (apiResult.ok && apiResult.data?.candidates?.length) {
     return {
       requestId: request.id,

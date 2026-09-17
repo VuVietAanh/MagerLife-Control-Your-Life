@@ -14,13 +14,46 @@ function getGroqConfig() {
   };
 }
 
-export function hasConfiguredLlm() {
+function getOpenAiConfig() {
+  return {
+    apiKey: process.env.OPENAI_API_KEY || "",
+    baseUrl: process.env.OPENAI_BASE_URL || "https://api.openai.com/v1",
+    model: process.env.OPENAI_MODEL || "gpt-4o-mini",
+  };
+}
+
+// aiOverride: { provider, apiKey, model, baseUrl } gửi kèm theo từng request khi user tự
+// cấu hình provider/API key riêng ở Settings > Trợ lý AI (xem apiContracts.ts: AiOverride).
+// Có override thì dùng override, không thì rơi về config mặc định trong .env của server.
+export function hasConfiguredLlm(aiOverride) {
+  if (aiOverride?.provider && aiOverride?.apiKey) return true;
   if (process.env.MAGERLIFE_ENABLE_REAL_LLM === "false") return false;
   const provider = process.env.MAGERLIFE_LLM_PROVIDER || "groq";
   if (provider === "mock") return false;
   if (provider === "groq") return Boolean(getGroqConfig().apiKey);
   if (provider === "xai") return Boolean(getXaiConfig().apiKey);
+  if (provider === "openai") return Boolean(getOpenAiConfig().apiKey);
   return false;
+}
+
+function resolveProviderConfig(aiOverride) {
+  if (aiOverride?.provider === "groq") {
+    const base = getGroqConfig();
+    return { provider: "groq", apiKey: aiOverride.apiKey || base.apiKey, baseUrl: aiOverride.baseUrl || base.baseUrl, model: aiOverride.model || base.model };
+  }
+  if (aiOverride?.provider === "xai") {
+    const base = getXaiConfig();
+    return { provider: "xai", apiKey: aiOverride.apiKey || base.apiKey, baseUrl: aiOverride.baseUrl || base.baseUrl, model: aiOverride.model || base.model };
+  }
+  if (aiOverride?.provider === "openai") {
+    const base = getOpenAiConfig();
+    return { provider: "openai", apiKey: aiOverride.apiKey || base.apiKey, baseUrl: aiOverride.baseUrl || base.baseUrl, model: aiOverride.model || base.model };
+  }
+  const provider = process.env.MAGERLIFE_LLM_PROVIDER || "groq";
+  if (provider === "groq") return { provider: "groq", ...getGroqConfig() };
+  if (provider === "xai") return { provider: "xai", ...getXaiConfig() };
+  if (provider === "openai") return { provider: "openai", ...getOpenAiConfig() };
+  return { provider, apiKey: "", baseUrl: "", model: "" };
 }
 
 function safeJsonFromText(text) {
@@ -49,9 +82,11 @@ function safeJsonFromText(text) {
   }
 }
 
-async function callXaiChatJson({ system, user, temperature = 0.2 }) {
-  const config = getXaiConfig();
-  if (!config.apiKey) throw new Error("Missing XAI_API_KEY");
+// Groq, xAI và OpenAI đều tương thích chuẩn OpenAI chat/completions, nên dùng chung một hàm gọi,
+// chỉ khác baseUrl/apiKey/model theo config đã resolve (mặc định .env hoặc aiOverride của user).
+async function callProviderChatJson({ system, user, temperature = 0.2, aiOverride }) {
+  const config = resolveProviderConfig(aiOverride);
+  if (!config.apiKey) throw new Error(`Missing API key for provider "${config.provider}"`);
   const response = await fetch(`${config.baseUrl.replace(/\/$/, "")}/chat/completions`, {
     method: "POST",
     headers: {
@@ -70,54 +105,18 @@ async function callXaiChatJson({ system, user, temperature = 0.2 }) {
   });
   if (!response.ok) {
     const detail = await response.text().catch(() => "");
-    throw new Error(`xAI request failed: ${response.status} ${detail.slice(0, 240)}`);
+    throw new Error(`${config.provider} request failed: ${response.status} ${detail.slice(0, 240)}`);
   }
   const data = await response.json();
   const content = data?.choices?.[0]?.message?.content || "";
   const parsed = safeJsonFromText(content);
-  if (!parsed) throw new Error("xAI returned non-JSON content");
+  if (!parsed) throw new Error(`${config.provider} returned non-JSON content`);
   return parsed;
 }
 
-async function callGroqChatJson({ system, user, temperature = 0.2 }) {
-  const config = getGroqConfig();
-  if (!config.apiKey) throw new Error("Missing GROQ_API_KEY");
-  const response = await fetch(`${config.baseUrl.replace(/\/$/, "")}/chat/completions`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${config.apiKey}`,
-    },
-    body: JSON.stringify({
-      model: config.model,
-      temperature,
-      response_format: { type: "json_object" },
-      messages: [
-        { role: "system", content: system },
-        { role: "user", content: user },
-      ],
-    }),
-  });
-  if (!response.ok) {
-    const detail = await response.text().catch(() => "");
-    throw new Error(`Groq request failed: ${response.status} ${detail.slice(0, 240)}`);
-  }
-  const data = await response.json();
-  const content = data?.choices?.[0]?.message?.content || "";
-  const parsed = safeJsonFromText(content);
-  if (!parsed) throw new Error("Groq returned non-JSON content");
-  return parsed;
-}
-
-function callProviderChatJson(args) {
-  const provider = process.env.MAGERLIFE_LLM_PROVIDER || "groq";
-  if (provider === "groq") return callGroqChatJson(args);
-  if (provider === "xai") return callXaiChatJson(args);
-  throw new Error(`Unsupported LLM provider: ${provider}`);
-}
-
-export async function resolveFoodWithLlm({ text, meal, profile }) {
+export async function resolveFoodWithLlm({ text, meal, profile, aiOverride }) {
   const parsed = await callProviderChatJson({
+    aiOverride,
     system:
       "Bạn là Nutrition Resolver cho MagerLife. Trả về JSON thuần, không markdown. Nhiệm vụ là ước tính khẩu phần/kcal để user xác nhận, không đưa lời khuyên ăn ít hơn/nhiều hơn. Luôn giữ đúng tên món người dùng nhập, không dịch sai, không đổi sang món khác. Nếu user dùng đơn vị đời thường như quả/cái/bát/tô/phần/ly/hộp, hãy quy đổi sang gram/ml theo khẩu phần phổ biến tại Việt Nam và phản ánh trong tên candidate. Ước tính bảo thủ, cần user xác nhận.",
     user: JSON.stringify({
@@ -193,8 +192,9 @@ export async function resolveFoodWithLlm({ text, meal, profile }) {
   };
 }
 
-export async function answerChatWithLlm({ text, profile, clientContext }) {
+export async function answerChatWithLlm({ text, profile, clientContext, aiOverride }) {
   const parsed = await callProviderChatJson({
+    aiOverride,
     system:
       "Bạn là Chat Agent của MagerLife. Trả JSON thuần. Vai trò chính là cập nhật thông tin vào hệ thống và đưa kết luận dựa trên dữ liệu. Không giảng giải dài, không tự khuyên nếu user chỉ đang ghi nhận dữ liệu. Chỉ cảnh báo khi dữ liệu cho thấy vượt kcal, gần/vượt budget hoặc có xung đột rõ. Không chẩn đoán y tế.",
     user: JSON.stringify({
@@ -241,8 +241,9 @@ export async function answerChatWithLlm({ text, profile, clientContext }) {
   };
 }
 
-export async function extractProfilePatchWithLlm({ patch, sourceText, currentProfile }) {
+export async function extractProfilePatchWithLlm({ patch, sourceText, currentProfile, aiOverride }) {
   const parsed = await callProviderChatJson({
+    aiOverride,
     system:
       "Bạn là Profile Extraction Agent của MagerLife. Chỉ trích xuất thông tin user tự nói rõ. Không bịa. Trả JSON thuần. Chỉ dùng các field được cho phép. Nếu không chắc thì bỏ qua và thêm warning.",
     user: JSON.stringify({

@@ -422,12 +422,13 @@ export async function handleMagerLifeApiRequest(req, res) {
   }
 
   if (req.method === "POST" && url.pathname === "/chat/turn") {
-    if (hasConfiguredLlm()) {
+    if (hasConfiguredLlm(body?.aiOverride)) {
       try {
         const result = await answerChatWithLlm({
           text: body?.text || "",
           profile: body?.profile || {},
           clientContext: body?.clientContext || {},
+          aiOverride: body?.aiOverride,
         });
         sendJson(req, res, 200, result);
         return;
@@ -449,12 +450,13 @@ export async function handleMagerLifeApiRequest(req, res) {
   }
 
   if (req.method === "POST" && url.pathname === "/nutrition/resolve-food") {
-    if (hasConfiguredLlm()) {
+    if (hasConfiguredLlm(body?.aiOverride)) {
       try {
         sendJson(req, res, 200, await resolveFoodWithLlm({
           text: body?.text || "",
           meal: body?.meal,
           profile: body?.profile || {},
+          aiOverride: body?.aiOverride,
         }));
         return;
       } catch (error) {
@@ -527,12 +529,13 @@ export async function handleMagerLifeApiRequest(req, res) {
   }
 
   if (req.method === "POST" && url.pathname === "/profile/update") {
-    if (hasConfiguredLlm() && body?.sourceText) {
+    if (hasConfiguredLlm(body?.aiOverride) && body?.sourceText) {
       try {
         const extraction = await extractProfilePatchWithLlm({
           patch: body.patch || {},
           sourceText: body.sourceText || "",
           currentProfile: body.profile || {},
+          aiOverride: body?.aiOverride,
         });
         const mergedPatch = { ...(body.patch || {}), ...extraction.patch };
         sendJson(req, res, 200, {

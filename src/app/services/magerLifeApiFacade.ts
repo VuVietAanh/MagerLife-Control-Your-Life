@@ -1,6 +1,7 @@
 import type { FoodLibraryItem } from "./foodLibraryService";
 import type { AgentEvent } from "./agentEventService";
 import { callMagerLifeApi, type ApiClientOptions } from "./apiClient";
+import type { AiOverride } from "./apiContracts";
 import type { NutritionApiRequest } from "./nutritionApiService";
 import { createPendingNutritionApiRequest } from "./nutritionApiService";
 import { resolveNutritionFromFoodLibrary, type ResolvedNutrition } from "./nutritionResolver";
@@ -256,12 +257,14 @@ export async function sendChatTurnToApi({
   profile,
   currency,
   activeTab = "dashboard",
+  aiOverride,
   options,
 }: {
   text: string;
   profile: UserProfile | null;
   currency: MoneyCurrency;
   activeTab?: string;
+  aiOverride?: AiOverride;
   options?: ApiClientOptions;
 }) {
   if (!profile) {
@@ -281,6 +284,7 @@ export async function sendChatTurnToApi({
         activeTab,
         localTime: new Date().toISOString(),
       },
+      aiOverride,
     },
     options
   );
@@ -290,11 +294,13 @@ export async function updateProfileViaApi({
   profile,
   patch,
   sourceText,
+  aiOverride,
   options,
 }: {
   profile: UserProfile;
   patch: Partial<UserProfile>;
   sourceText: string;
+  aiOverride?: AiOverride;
   options?: ApiClientOptions;
 }) {
   return callMagerLifeApi(
@@ -304,6 +310,7 @@ export async function updateProfileViaApi({
       profile,
       patch,
       sourceText,
+      aiOverride,
     },
     options
   );

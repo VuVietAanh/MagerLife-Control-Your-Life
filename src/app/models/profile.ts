@@ -5,6 +5,18 @@ import type { NutritionDietModeChanges, NutritionMealLog, NutritionTrackingMode 
 
 export type SubscriptionPlan = "free" | "pro";
 
+// "mock" = chỉ dùng rule engine local, không gọi model nào.
+// "ollama" = model chạy ngay trên máy người dùng (free, không cần key).
+// "groq" | "openai" | "xai" = provider trên mây, cần user tự đưa API key riêng.
+export type AiProviderKey = "mock" | "ollama" | "groq" | "openai" | "xai";
+
+export type AiSettings = {
+  provider: AiProviderKey;
+  apiKey?: string;
+  model?: string;
+  baseUrl?: string;
+};
+
 export type UserProfile = {
   email: string;
   name?: string;
@@ -54,4 +66,5 @@ export type UserProfile = {
   customChoiceSummary?: string;
   extractedSignals?: Record<string, number | string | boolean>;
   setupComplete?: boolean;
+  aiSettings?: AiSettings;
 };
