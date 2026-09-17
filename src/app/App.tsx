@@ -3902,8 +3902,10 @@ function FinanceView({
     name: "",
     emoji: "💰",
     percentage: 5,
+    amountInput: "",
     purposeNote: "",
   });
+  const [jarInputMode, setJarInputMode] = useState<"percent" | "amount">("percent");
   const [txDraft, setTxDraft] = useState({
     jarId: jars[0]?.id || "",
     type: "expense" as "expense" | "income",
@@ -3993,8 +3995,16 @@ function FinanceView({
           };
 
   function resetDraft() {
-    setDraft({ name: "", emoji: "💰", percentage: Math.max(1, Math.min(5, Math.max(remaining, 1))), purposeNote: "" });
+    const nextPct = Math.max(1, Math.min(5, Math.max(remaining, 1)));
+    setDraft({
+      name: "",
+      emoji: "💰",
+      percentage: nextPct,
+      amountInput: formatFinanceInput(String(Math.round((salary * nextPct) / 100))),
+      purposeNote: "",
+    });
     setEditingId(null);
+    setJarInputMode("percent");
   }
 
   function addJar() {
@@ -4124,8 +4134,10 @@ function FinanceView({
       name: jar.name,
       emoji: jar.emoji,
       percentage: jar.percentage,
+      amountInput: formatFinanceInput(String(jar.monthlyAllocation)),
       purposeNote: jar.purposeNote,
     });
+    setJarInputMode("percent");
   }
 
   function saveChanges() {
@@ -4314,17 +4326,59 @@ function FinanceView({
               <input value={draft.name} onChange={(event) => setDraft((prev) => ({ ...prev, name: event.target.value }))} placeholder="VD: Sinh hoạt, Đầu tư..." className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none" />
             </label>
           </div>
-          <label className="block space-y-1.5">
-            <span className="text-xs font-semibold text-slate-500">Phần trăm lượng tiền (%)</span>
-            <input
-              type="number"
-              min={1}
-              max={100}
-              value={draft.percentage}
-              onChange={(event) => setDraft((prev) => ({ ...prev, percentage: Number(event.target.value) }))}
-              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none"
-            />
-          </label>
+          <div className="space-y-1.5">
+            <span className="text-xs font-semibold text-slate-500">Cách nhập lượng tiền</span>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setJarInputMode("percent")}
+                className={`flex-1 h-9 rounded-lg border text-xs font-bold transition ${jarInputMode === "percent" ? "border-slate-900 bg-slate-900 text-white" : "border-slate-200 bg-white text-slate-500"}`}
+              >
+                Theo %
+              </button>
+              <button
+                type="button"
+                onClick={() => setJarInputMode("amount")}
+                className={`flex-1 h-9 rounded-lg border text-xs font-bold transition ${jarInputMode === "amount" ? "border-slate-900 bg-slate-900 text-white" : "border-slate-200 bg-white text-slate-500"}`}
+              >
+                Theo số tiền
+              </button>
+            </div>
+          </div>
+          {jarInputMode === "percent" ? (
+            <label className="block space-y-1.5">
+              <span className="text-xs font-semibold text-slate-500">Phần trăm lượng tiền (%)</span>
+              <input
+                type="number"
+                min={1}
+                max={100}
+                value={draft.percentage}
+                onChange={(event) => {
+                  const pct = Number(event.target.value);
+                  setDraft((prev) => ({ ...prev, percentage: pct, amountInput: formatFinanceInput(String(Math.round((salary * pct) / 100))) }));
+                }}
+                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none"
+              />
+              <p className="text-xs text-slate-400">≈ {formatCurrency(Math.round((salary * draft.percentage) / 100), currency)}/tháng</p>
+            </label>
+          ) : (
+            <label className="block space-y-1.5">
+              <span className="text-xs font-semibold text-slate-500">Số tiền / tháng</span>
+              <input
+                inputMode="decimal"
+                value={draft.amountInput}
+                onChange={(event) => {
+                  const formatted = formatFinanceInput(event.target.value);
+                  const amount = parseFinanceAmount(formatted);
+                  const pct = salary > 0 ? Math.round(((amount / salary) * 100) * 100) / 100 : 0;
+                  setDraft((prev) => ({ ...prev, amountInput: formatted, percentage: pct }));
+                }}
+                placeholder={currency === "USD" ? "VD: 350.00" : "VD: 3.150.000"}
+                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none"
+              />
+              <p className="text-xs text-slate-400">≈ {draft.percentage}% thu nhập</p>
+            </label>
+          )}
           <label className="block space-y-1.5">
             <span className="text-xs font-semibold text-slate-500">Ghi chú mục đích cho AI</span>
             <textarea
