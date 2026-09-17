@@ -3937,7 +3937,7 @@ function FinanceView({
 
   function parseFinanceAmount(value: string) {
     if (currency === "USD") return Number(value.replace(/,/g, ""));
-    return parseMoney(value);
+    return Number(value.replace(/\D/g, ""));
   }
 
   function formatFinanceInput(value: string) {
