@@ -3863,6 +3863,8 @@ function ChatPanel({
   );
 }
 
+const UNASSIGNED_JAR_TARGET = "__unassigned__";
+
 function FinanceView({
   jars,
   setJars,
@@ -4049,10 +4051,11 @@ function FinanceView({
   function confirmDeleteJar() {
     if (!pendingJarDelete) return;
     const { jar, relatedTransactions, targetJarId } = pendingJarDelete;
+    const isUnassignedChoice = targetJarId === UNASSIGNED_JAR_TARGET;
     const targetJar = jars.find((item) => item.id === targetJarId);
 
-    if ((relatedTransactions.length > 0 || jar.balance > 0) && !targetJar) {
-      setToast("Hũ này còn số dư hoặc đã có giao dịch. Hãy tạo hoặc chọn một hũ khác để chuyển trước khi xóa.");
+    if ((relatedTransactions.length > 0 || jar.balance > 0) && !targetJar && !isUnassignedChoice) {
+      setToast('Hũ này còn số dư hoặc đã có giao dịch. Hãy chọn một hũ khác để chuyển, hoặc chọn "Chưa chọn" nếu muốn để lại khoản tiền thừa.');
       return;
     }
 
@@ -4074,7 +4077,18 @@ function FinanceView({
     setTransactions((prev) =>
       prev.flatMap((tx) => {
         if (tx.jarId !== jar.id) return [tx];
-        if (!targetJar) return [];
+        if (!targetJar) {
+          if (isUnassignedChoice) {
+            return [
+              {
+                ...tx,
+                jarId: "",
+                note: tx.note ? `${tx.note} · hũ ${jar.name} đã bị xóa` : `Hũ ${jar.name} đã bị xóa`,
+              },
+            ];
+          }
+          return [];
+        }
         return [
           {
             ...tx,
@@ -4091,9 +4105,11 @@ function FinanceView({
     }
     setPendingJarDelete(null);
     setToast(
-      (relatedTransactions.length > 0 || jar.balance > 0) && targetJar
-        ? `Đã gộp hũ ${jar.name} vào ${targetJar.name}: chuyển ${jar.percentage}%, ${formatCurrency(jar.balance, currency)} còn lại và ${relatedTransactions.length} giao dịch.`
-        : `Đã xóa hũ ${jar.name}. Hãy chỉnh lại ${jar.percentage}% phân bổ còn thiếu trước khi lưu.`
+      isUnassignedChoice && (relatedTransactions.length > 0 || jar.balance > 0)
+        ? `Đã xóa hũ ${jar.name}. Còn thừa ${formatCurrency(jar.balance, currency)} chưa được cộng vào hũ nào — hãy chỉnh lại ${jar.percentage}% phân bổ còn thiếu trước khi lưu.`
+        : (relatedTransactions.length > 0 || jar.balance > 0) && targetJar
+          ? `Đã gộp hũ ${jar.name} vào ${targetJar.name}: chuyển ${jar.percentage}%, ${formatCurrency(jar.balance, currency)} còn lại và ${relatedTransactions.length} giao dịch.`
+          : `Đã xóa hũ ${jar.name}. Hãy chỉnh lại ${jar.percentage}% phân bổ còn thiếu trước khi lưu.`
     );
   }
 
@@ -4638,6 +4654,7 @@ function FinanceView({
                   onChange={(event) => setPendingJarDelete((prev) => (prev ? { ...prev, targetJarId: event.target.value } : prev))}
                   className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none"
                 >
+                  <option value={UNASSIGNED_JAR_TARGET}>🤷 Chưa chọn</option>
                   {pendingJarDeleteOptions.map((jar) => (
                     <option key={jar.id} value={jar.id}>
                       {jar.emoji} {jar.name}
@@ -4645,7 +4662,9 @@ function FinanceView({
                   ))}
                 </select>
                 <p className="text-xs leading-relaxed text-slate-500">
-                  MagerLife sẽ cộng {formatCurrency(pendingJarDelete.jar.balance, currency)} còn lại, gộp {pendingJarDelete.jar.percentage}% phân bổ, giữ các giao dịch này, đổi hũ liên kết, và thêm ghi chú “chuyển từ hũ {pendingJarDelete.jar.name}”.
+                  {pendingJarDelete.targetJarId === UNASSIGNED_JAR_TARGET
+                    ? `MagerLife sẽ không cộng ${formatCurrency(pendingJarDelete.jar.balance, currency)} còn lại vào hũ nào — chỉ báo cho bạn đây là khoản tiền thừa chưa phân bổ. Các giao dịch cũ vẫn được giữ lại nhưng bỏ liên kết hũ.`
+                    : `MagerLife sẽ cộng ${formatCurrency(pendingJarDelete.jar.balance, currency)} còn lại, gộp ${pendingJarDelete.jar.percentage}% phân bổ, giữ các giao dịch này, đổi hũ liên kết, và thêm ghi chú "chuyển từ hũ ${pendingJarDelete.jar.name}".`}
                 </p>
               </label>
             )}
