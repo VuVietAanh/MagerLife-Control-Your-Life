@@ -4015,7 +4015,10 @@ function FinanceView({
       setToast(`Tỷ lệ này sẽ vượt 100%. Hiện chỉ còn tối đa ${availablePct}%.`);
       return;
     }
-    const monthlyAllocation = Math.round((salary * draft.percentage) / 100);
+    const monthlyAllocation =
+      jarInputMode === "amount" && draft.amountInput
+        ? parseFinanceAmount(draft.amountInput)
+        : Math.round((salary * draft.percentage) / 100);
     if (editingId) {
       setJars((prev) =>
         prev.map((jar) =>
