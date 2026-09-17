@@ -3872,6 +3872,9 @@ function FinanceView({
   setTransactions,
   salary,
   currency,
+  savedJars,
+  setSavedJars,
+  setSavedTransactions,
 }: {
   jars: Jar[];
   setJars: React.Dispatch<React.SetStateAction<Jar[]>>;
@@ -3879,8 +3882,10 @@ function FinanceView({
   setTransactions: React.Dispatch<React.SetStateAction<Transaction[]>>;
   salary: number;
   currency: MoneyCurrency;
+  savedJars: Jar[];
+  setSavedJars: React.Dispatch<React.SetStateAction<Jar[]>>;
+  setSavedTransactions: React.Dispatch<React.SetStateAction<Transaction[]>>;
 }) {
-  const [savedJars, setSavedJars] = useState<Jar[]>(jars);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingTxId, setEditingTxId] = useState<string | null>(null);
   const jarEditorRef = useRef<HTMLElement | null>(null);
@@ -4133,6 +4138,7 @@ function FinanceView({
       return;
     }
     setSavedJars(jars);
+    setSavedTransactions(transactions);
     setToast("Đã lưu thông tin hũ.");
   }
 
@@ -4155,6 +4161,7 @@ function FinanceView({
     ];
     setJars(nextJars);
     setSavedJars(nextJars);
+    setSavedTransactions(transactions);
     setShowConfirmRemainder(false);
     setToast(`Đã tạo hũ Tiền thừa ${remainderPct}% và lưu cấu hình.`);
   }
@@ -6445,6 +6452,9 @@ export default function App() {
   const [jars, setJars] = useState<Jar[]>(initialJars);
   const [memories, setMemories] = useState<Memory[]>(initialMemories);
   const [transactions, setTransactions] = useState<Transaction[]>(initialTransactions);
+  const [savedJars, setSavedJars] = useState<Jar[]>(initialJars);
+  const [savedTransactions, setSavedTransactions] = useState<Transaction[]>(initialTransactions);
+  const [pendingTabChange, setPendingTabChange] = useState<Tab | null>(null);
   const [adminFoodLibrary, setAdminFoodLibrary] = useState<FoodLibraryItem[]>(() => loadAdminFoodLibrary());
   const foodLibraryApiReadyRef = useRef(false);
   const financeApiReadyRef = useRef(false);
@@ -6526,6 +6536,8 @@ export default function App() {
     setCurrency(normalizedProfile.currency || "VND");
     setJars(starterJars);
     setTransactions([]);
+    setSavedJars(starterJars);
+    setSavedTransactions([]);
     setMemories(createMemoriesFromProfile(normalizedProfile));
     setTab("dashboard");
     setIsAuthenticated(true);
@@ -6535,6 +6547,8 @@ export default function App() {
         const snapshot = result.data.financeSnapshot;
         setJars(snapshot.jars);
         setTransactions(snapshot.transactions || []);
+        setSavedJars(snapshot.jars);
+        setSavedTransactions(snapshot.transactions || []);
         if (snapshot.currency) setCurrency(snapshot.currency);
         financeApiReadyRef.current = true;
         return;
@@ -6671,11 +6685,40 @@ export default function App() {
     }
   }
 
+  const hasUnsavedJarChanges = JSON.stringify(jars) !== JSON.stringify(savedJars);
+
+  function requestTabChange(nextTab: Tab) {
+    if (hasUnsavedJarChanges && nextTab !== tab) {
+      setPendingTabChange(nextTab);
+      return;
+    }
+    setTab(nextTab);
+  }
+
+  function discardJarChangesAndSwitchTab() {
+    setJars(savedJars);
+    setTransactions(savedTransactions);
+    const nextTab = pendingTabChange;
+    setPendingTabChange(null);
+    if (nextTab) setTab(nextTab);
+  }
+
+  function keepJarChangesAndSwitchTab() {
+    setSavedJars(jars);
+    setSavedTransactions(transactions);
+    const nextTab = pendingTabChange;
+    setPendingTabChange(null);
+    if (nextTab) setTab(nextTab);
+  }
+
   function handleLogout() {
     setIsAuthenticated(false);
     setProfile(null);
     setJars(initialJars);
     setTransactions(initialTransactions);
+    setSavedJars(initialJars);
+    setSavedTransactions(initialTransactions);
+    setPendingTabChange(null);
     setMemories(initialMemories);
     setTab("dashboard");
     financeApiReadyRef.current = false;
@@ -6688,10 +6731,28 @@ export default function App() {
           <AuthFlow onComplete={completeAuth} />
         ) : (
           <>
-        <Header tab={tab} setTab={setTab} profile={profile} onLogout={handleLogout} />
+        <Header tab={tab} setTab={requestTabChange} profile={profile} onLogout={handleLogout} />
+        {pendingTabChange && (
+          <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/30 p-4 backdrop-blur-sm">
+            <div className="w-full max-w-md rounded-2xl border border-white/80 bg-white p-5 shadow-2xl">
+              <h3 className="text-lg font-bold text-slate-900">Hũ có thay đổi chưa lưu</h3>
+              <p className="mt-2 text-sm leading-relaxed text-slate-600">
+                Bạn vừa chỉnh cấu trúc hũ (xóa/gộp hũ hoặc đổi %) nhưng chưa bấm "Lưu thay đổi". Bạn muốn hủy để giữ nguyên như trước khi thao tác, hay lưu lại thay đổi này rồi tiếp tục?
+              </p>
+              <div className="mt-5 flex gap-2">
+                <button onClick={discardJarChangesAndSwitchTab} className="flex-1 rounded-lg border border-slate-200 bg-white py-2 text-sm font-semibold text-slate-600">
+                  Hủy, giữ như trước
+                </button>
+                <button onClick={keepJarChangesAndSwitchTab} className="flex-1 rounded-lg bg-slate-900 py-2 text-sm font-semibold text-white">
+                  Lưu thay đổi, tiếp tục
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
         <ViewErrorBoundary key={tab} fallbackTitle={`Không mở được mục ${getNavigationTabs(profile).find((item) => item.id === tab)?.label || tab}`} onReset={() => setTab("dashboard")}>
           {tab === "dashboard" && <Dashboard jars={jars} transactions={transactions} profile={profile} currency={currency} adminFoodLibrary={adminFoodLibrary} onProfileUpdate={updateProfileFromConversation} />}
-          {tab === "finance" && <FinanceView jars={jars} setJars={setJars} transactions={transactions} setTransactions={setTransactions} salary={monthlyIncome} currency={currency} />}
+          {tab === "finance" && <FinanceView jars={jars} setJars={setJars} transactions={transactions} setTransactions={setTransactions} salary={monthlyIncome} currency={currency} savedJars={savedJars} setSavedJars={setSavedJars} setSavedTransactions={setSavedTransactions} />}
           {tab === "onboarding" && <OnboardingView profile={profile} onProfileUpdate={updateProfileFromConversation} jars={jars} transactions={transactions} currency={currency} />}
           {tab === "account" && <AccountView profile={profile} onProfileUpdate={updateProfileFromConversation} />}
           {tab === "admin" && <AdminOverviewView profile={profile} users={adminUsers} foodLibrary={adminFoodLibrary} agentEvents={agentEvents} setTab={setTab} />}
