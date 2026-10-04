@@ -11,3 +11,7 @@ yarn-error.log*
 pnpm-debug.log*
 .DS_Store
 Thumbs.db
+
+# Secrets / recovery codes - never commit
+recovery-codes.txt
+*recovery-codes*
