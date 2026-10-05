@@ -66,6 +66,7 @@ import { appendAgentTrainingRecord, buildAdminAnalyticsSnapshot, loadAgentTraini
 import { resolveChatAgentTurn } from "./services/chatAgentService";
 import {
   loadAdminFoodLibrary,
+  NUTRIENT_CATALOG,
   saveAdminFoodLibrary,
   type FoodLibraryItem,
 } from "./services/foodLibraryService";
@@ -5556,11 +5557,24 @@ function FoodAdminView({
     fiberPer100g: "",
     tags: "",
   });
+  // Amounts for everything beyond the five core macros, keyed by nutrient key and
+  // held as strings so a half-typed value doesn't get coerced to NaN mid-edit.
+  const [extraNutrients, setExtraNutrients] = useState<Record<string, string>>({});
+  const [nutrientsExpanded, setNutrientsExpanded] = useState(false);
   const [query, setQuery] = useState("");
   const [editingFoodId, setEditingFoodId] = useState<string | null>(null);
   const [foodFormError, setFoodFormError] = useState("");
   const foodImportRef = useRef<HTMLInputElement | null>(null);
   const pendingFoodRequests = profile?.pendingNutritionApiRequests?.filter((request) => request.status === "pending") || [];
+
+  const nutrientsByGroup = NUTRIENT_CATALOG.reduce<Record<string, typeof NUTRIENT_CATALOG>>((acc, definition) => {
+    const group = definition.groupName || "Khác";
+    if (!acc[group]) acc[group] = [];
+    acc[group].push(definition);
+    return acc;
+  }, {});
+  const nutrientGroupNames = Object.keys(nutrientsByGroup);
+  const filledExtraNutrientCount = Object.values(extraNutrients).filter((value) => Number(value) > 0).length;
 
   function patchDraft(key: keyof typeof draft, value: string) {
     setDraft((prev) => ({ ...prev, [key]: value }));
@@ -5568,6 +5582,8 @@ function FoodAdminView({
 
   function resetFoodDraft() {
     setDraft({ name: "", aliases: "", servingGram: "100", servingUnit: "g", kcalPer100g: "", proteinPer100g: "", carbsPer100g: "", fatPer100g: "", fiberPer100g: "", tags: "" });
+    setExtraNutrients({});
+    setNutrientsExpanded(false);
     setEditingFoodId(null);
     setFoodFormError("");
   }
@@ -5611,6 +5627,12 @@ function FoodAdminView({
       carbsPer100g: Number(draft.carbsPer100g) || 0,
       fatPer100g: Number(draft.fatPer100g) || 0,
       fiberPer100g: Number(draft.fiberPer100g) || 0,
+      nutrients: NUTRIENT_CATALOG.flatMap((definition) => {
+        const amount = Number(extraNutrients[definition.key]);
+        // Blank or zero means "not measured" rather than "contains none".
+        if (!Number.isFinite(amount) || amount <= 0) return [];
+        return [{ ...definition, amount }];
+      }),
       tags: draft.tags
         .split(",")
         .map((item) => item.trim())
@@ -5642,6 +5664,12 @@ function FoodAdminView({
       fiberPer100g: String(food.fiberPer100g || ""),
       tags: (food.tags || []).join(", "),
     });
+    const storedAmounts: Record<string, string> = {};
+    (food.nutrients || []).forEach((entry) => {
+      storedAmounts[entry.key] = String(entry.amount);
+    });
+    setExtraNutrients(storedAmounts);
+    setNutrientsExpanded(Object.keys(storedAmounts).length > 0);
   }
 
   function exportFoodLibrary() {
@@ -5756,6 +5784,54 @@ function FoodAdminView({
               <input value={draft.fiberPer100g} onChange={(event) => patchDraft("fiberPer100g", event.target.value)} placeholder="VD: 0.3" className="w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm font-semibold outline-none focus:border-emerald-400" />
             </label>
           </div>
+          <div className="space-y-2 rounded-xl border border-slate-200 bg-slate-50/60 p-3">
+            <button
+              type="button"
+              onClick={() => setNutrientsExpanded((prev) => !prev)}
+              className="flex w-full items-center justify-between gap-2 text-left"
+            >
+              <span>
+                <span className="block text-[11px] font-black text-slate-700">Chất dinh dưỡng khác</span>
+                <span className="block text-[10px] font-medium text-slate-400">
+                  Khoáng chất, vitamin, hoạt chất, thực phẩm bổ sung — điền chất nào biết, bỏ trống phần còn lại.
+                </span>
+              </span>
+              <span className="flex shrink-0 items-center gap-1 rounded-lg border border-slate-200 bg-white px-2 py-1 text-[10px] font-black text-slate-500">
+                {filledExtraNutrientCount > 0 && <span className="text-emerald-600">{filledExtraNutrientCount}</span>}
+                {nutrientsExpanded ? "Thu gọn" : "Mở rộng"}
+                <ChevronDown className={`h-3 w-3 transition-transform ${nutrientsExpanded ? "rotate-180" : ""}`} />
+              </span>
+            </button>
+
+            {nutrientsExpanded && (
+              <div className="space-y-3 border-t border-slate-200 pt-3">
+                {nutrientGroupNames.map((groupName) => (
+                  <div key={groupName} className="space-y-1.5">
+                    <p className="text-[10px] font-black uppercase tracking-wide text-slate-400">{groupName}</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      {nutrientsByGroup[groupName].map((definition) => (
+                        <label key={definition.key} className="block space-y-1">
+                          <span className="text-[10px] font-bold text-slate-500">
+                            {definition.name} <span className="font-medium text-slate-400">({definition.unit})</span>
+                          </span>
+                          <input
+                            value={extraNutrients[definition.key] || ""}
+                            onChange={(event) =>
+                              setExtraNutrients((prev) => ({ ...prev, [definition.key]: event.target.value }))
+                            }
+                            inputMode="decimal"
+                            placeholder="0"
+                            className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-xs font-semibold outline-none focus:border-emerald-400"
+                          />
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
           <label className="block space-y-1">
             <span className="text-[11px] font-bold text-slate-500">Tag phân loại</span>
             <input value={draft.tags} onChange={(event) => patchDraft("tags", event.target.value)} placeholder="protein cao, món Việt, ăn chay..." className="w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm font-semibold outline-none focus:border-emerald-400" />

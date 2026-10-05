@@ -35,6 +35,30 @@ export type FoodLibraryItem = {
   updatedAt: string;
 };
 
+/**
+ * Selectable nutrients beyond the five core macros, mirroring the seeded rows of the
+ * `nutrients` table. Each entry carries the unit its amount is measured in, so the
+ * entry form and the detail panel never have to guess.
+ */
+export const NUTRIENT_CATALOG: NutrientDefinition[] = [
+  { key: "sugar", name: "Đường", unit: "g", category: "macro", groupName: "Carbohydrate", sortOrder: 10 },
+  { key: "saturated_fat", name: "Chất béo bão hòa", unit: "g", category: "fatty_acid", groupName: "Chất béo", sortOrder: 20 },
+  { key: "cholesterol", name: "Cholesterol", unit: "mg", category: "other_compound", groupName: "Chất béo", sortOrder: 24 },
+  { key: "sodium", name: "Natri", unit: "mg", category: "mineral", groupName: "Khoáng chất", sortOrder: 30 },
+  { key: "potassium", name: "Kali", unit: "mg", category: "mineral", groupName: "Khoáng chất", sortOrder: 31 },
+  { key: "calcium", name: "Canxi", unit: "mg", category: "mineral", groupName: "Khoáng chất", sortOrder: 32 },
+  { key: "iron", name: "Sắt", unit: "mg", category: "mineral", groupName: "Khoáng chất", sortOrder: 33 },
+  { key: "magnesium", name: "Magie", unit: "mg", category: "mineral", groupName: "Khoáng chất", sortOrder: 34 },
+  { key: "zinc", name: "Kẽm", unit: "mg", category: "mineral", groupName: "Khoáng chất", sortOrder: 35 },
+  { key: "vitamin_a", name: "Vitamin A", unit: "mcg", category: "vitamin", groupName: "Vitamin", sortOrder: 40 },
+  { key: "vitamin_c", name: "Vitamin C", unit: "mg", category: "vitamin", groupName: "Vitamin", sortOrder: 41 },
+  { key: "vitamin_d", name: "Vitamin D", unit: "mcg", category: "vitamin", groupName: "Vitamin", sortOrder: 42 },
+  { key: "vitamin_b12", name: "Vitamin B12", unit: "mcg", category: "vitamin", groupName: "Vitamin", sortOrder: 43 },
+  { key: "caffeine", name: "Caffeine", unit: "mg", category: "other_compound", groupName: "Hoạt chất khác", sortOrder: 60 },
+  { key: "creatine", name: "Creatine", unit: "g", category: "supplement", groupName: "Thực phẩm bổ sung", sortOrder: 70 },
+  { key: "l_citrulline", name: "L-Citrulline", unit: "g", category: "supplement", groupName: "Thực phẩm bổ sung", sortOrder: 71 },
+];
+
 export const FOOD_LIBRARY_STORAGE_KEY = "magerlife_admin_food_library_v1";
 
 export const defaultAdminFoodLibrary: FoodLibraryItem[] = [
