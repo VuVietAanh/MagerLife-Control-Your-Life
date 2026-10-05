@@ -5708,24 +5708,58 @@ function FoodAdminView({
               Đang sửa món trong kho. Lưu sẽ thay thế bản ghi cũ, không tạo món mới.
             </div>
           )}
-          <input value={draft.name} onChange={(event) => patchDraft("name", event.target.value)} placeholder="Tên món, VD: Cơm gạo lứt" className="w-full rounded-xl border border-emerald-100 bg-white px-3 py-3 text-sm font-semibold outline-none focus:border-emerald-400" />
-          <input value={draft.aliases} onChange={(event) => patchDraft("aliases", event.target.value)} placeholder="Alias, cách gọi khác, cách nhau bằng dấu phẩy" className="w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm font-semibold outline-none focus:border-emerald-400" />
+          <label className="block space-y-1">
+            <span className="text-[11px] font-bold text-slate-500">Tên món <span className="text-rose-500">*</span></span>
+            <input value={draft.name} onChange={(event) => patchDraft("name", event.target.value)} placeholder="VD: Cơm gạo lứt" className="w-full rounded-xl border border-emerald-100 bg-white px-3 py-3 text-sm font-semibold outline-none focus:border-emerald-400" />
+          </label>
+          <label className="block space-y-1">
+            <span className="text-[11px] font-bold text-slate-500">Tên gọi khác (alias)</span>
+            <input value={draft.aliases} onChange={(event) => patchDraft("aliases", event.target.value)} placeholder="Cách nhau bằng dấu phẩy: cơm lứt, com lut, brown rice" className="w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm font-semibold outline-none focus:border-emerald-400" />
+            <span className="block text-[10px] font-medium text-slate-400">Giúp chatbot nhận ra món khi người dùng gõ kiểu khác.</span>
+          </label>
           <div className="grid grid-cols-2 gap-3">
-            <input value={draft.servingGram} onChange={(event) => patchDraft("servingGram", event.target.value)} placeholder="Khẩu phần g" className="rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm font-semibold outline-none focus:border-emerald-400" />
-            <select value={draft.servingUnit} onChange={(event) => patchDraft("servingUnit", event.target.value)} className="rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm font-bold text-slate-700 outline-none focus:border-emerald-400">
-              {foodServingUnits.map((unit) => (
-                <option key={unit} value={unit}>{unit}</option>
-              ))}
-            </select>
-            <input value={draft.kcalPer100g} onChange={(event) => patchDraft("kcalPer100g", event.target.value)} placeholder="kcal/100g hoặc 100ml" className="rounded-xl border border-amber-200 bg-amber-50/50 px-3 py-3 text-sm font-bold outline-none focus:border-amber-400" />
+            <label className="block space-y-1">
+              <span className="text-[11px] font-bold text-slate-500">Khẩu phần quy chiếu</span>
+              <input value={draft.servingGram} onChange={(event) => patchDraft("servingGram", event.target.value)} placeholder="100" className="w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm font-semibold outline-none focus:border-emerald-400" />
+            </label>
+            <label className="block space-y-1">
+              <span className="text-[11px] font-bold text-slate-500">Đơn vị đo</span>
+              <select value={draft.servingUnit} onChange={(event) => patchDraft("servingUnit", event.target.value)} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm font-bold text-slate-700 outline-none focus:border-emerald-400">
+                {foodServingUnits.map((unit) => (
+                  <option key={unit} value={unit}>{unit}</option>
+                ))}
+              </select>
+            </label>
+            <label className="block space-y-1">
+              <span className="text-[11px] font-bold text-slate-500">Năng lượng (kcal) <span className="text-rose-500">*</span></span>
+              <input value={draft.kcalPer100g} onChange={(event) => patchDraft("kcalPer100g", event.target.value)} placeholder="VD: 76" className="w-full rounded-xl border border-amber-200 bg-amber-50/50 px-3 py-3 text-sm font-bold outline-none focus:border-amber-400" />
+            </label>
           </div>
+          <p className="text-[10px] font-medium text-slate-400">
+            Bốn chỉ số dưới đây tính trên đúng khẩu phần quy chiếu ở trên, đơn vị gam.
+          </p>
           <div className="grid grid-cols-2 gap-3">
-            <input value={draft.proteinPer100g} onChange={(event) => patchDraft("proteinPer100g", event.target.value)} placeholder="Đạm/100g" className="rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm font-semibold outline-none focus:border-emerald-400" />
-            <input value={draft.carbsPer100g} onChange={(event) => patchDraft("carbsPer100g", event.target.value)} placeholder="Carb/100g" className="rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm font-semibold outline-none focus:border-emerald-400" />
-            <input value={draft.fatPer100g} onChange={(event) => patchDraft("fatPer100g", event.target.value)} placeholder="Béo/100g" className="rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm font-semibold outline-none focus:border-emerald-400" />
-            <input value={draft.fiberPer100g} onChange={(event) => patchDraft("fiberPer100g", event.target.value)} placeholder="Xơ/100g" className="rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm font-semibold outline-none focus:border-emerald-400" />
+            <label className="block space-y-1">
+              <span className="text-[11px] font-bold text-slate-500">Đạm / protein (g)</span>
+              <input value={draft.proteinPer100g} onChange={(event) => patchDraft("proteinPer100g", event.target.value)} placeholder="VD: 8" className="w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm font-semibold outline-none focus:border-emerald-400" />
+            </label>
+            <label className="block space-y-1">
+              <span className="text-[11px] font-bold text-slate-500">Tinh bột / carb (g)</span>
+              <input value={draft.carbsPer100g} onChange={(event) => patchDraft("carbsPer100g", event.target.value)} placeholder="VD: 1.9" className="w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm font-semibold outline-none focus:border-emerald-400" />
+            </label>
+            <label className="block space-y-1">
+              <span className="text-[11px] font-bold text-slate-500">Chất béo (g)</span>
+              <input value={draft.fatPer100g} onChange={(event) => patchDraft("fatPer100g", event.target.value)} placeholder="VD: 4.8" className="w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm font-semibold outline-none focus:border-emerald-400" />
+            </label>
+            <label className="block space-y-1">
+              <span className="text-[11px] font-bold text-slate-500">Chất xơ (g)</span>
+              <input value={draft.fiberPer100g} onChange={(event) => patchDraft("fiberPer100g", event.target.value)} placeholder="VD: 0.3" className="w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm font-semibold outline-none focus:border-emerald-400" />
+            </label>
           </div>
-          <input value={draft.tags} onChange={(event) => patchDraft("tags", event.target.value)} placeholder="Tag: protein cao, món Việt, ăn chay..." className="w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm font-semibold outline-none focus:border-emerald-400" />
+          <label className="block space-y-1">
+            <span className="text-[11px] font-bold text-slate-500">Tag phân loại</span>
+            <input value={draft.tags} onChange={(event) => patchDraft("tags", event.target.value)} placeholder="protein cao, món Việt, ăn chay..." className="w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm font-semibold outline-none focus:border-emerald-400" />
+          </label>
           {foodFormError && <p className="rounded-xl border border-rose-100 bg-rose-50 px-3 py-2 text-xs font-bold text-rose-700">{foodFormError}</p>}
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_auto]">
             <button type="button" onClick={saveFood} className="flex w-full items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-3 text-sm font-black text-white shadow-lg shadow-slate-200 hover:bg-emerald-700">
