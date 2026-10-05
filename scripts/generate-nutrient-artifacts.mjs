@@ -24,13 +24,15 @@ function parseCatalog() {
   const end = source.indexOf("export const FOOD_LIBRARY_STORAGE_KEY");
   if (start === -1 || end === -1) throw new Error(`Could not locate NUTRIENT_CATALOG in ${SERVICE_PATH}`);
 
-  const pattern = /\{ key: "([^"]+)", name: "([^"]+)", unit: "([^"]+)", category: "([^"]+)", groupName: "([^"]+)", sortOrder: (\d+) \}/g;
-  const rows = [...source.slice(start, end).matchAll(pattern)].map(([, key, name, unit, category, groupName, sortOrder]) => ({
+  const pattern = /\{ key: "([^"]+)", name: "([^"]+)", unit: "([^"]+)", category: "([^"]+)", groupName: "([^"]+)", subgroup: "([^"]*)", isCore: (true|false), sortOrder: (\d+) \}/g;
+  const rows = [...source.slice(start, end).matchAll(pattern)].map(([, key, name, unit, category, groupName, subgroup, isCore, sortOrder]) => ({
     key,
     name,
     unit,
     category,
     groupName,
+    subgroup,
+    isCore: isCore === "true",
     sortOrder: Number(sortOrder),
   }));
 
@@ -42,8 +44,9 @@ function parseCatalog() {
 
 function writeSeedSql(rows) {
   const sqlString = (value) => `'${value.replace(/'/g, "''")}'`;
+  const keyArray = `array[${rows.map((row) => sqlString(row.key)).join(", ")}]`;
   const values = rows
-    .map((row) => `  (${sqlString(row.key)}, ${sqlString(row.name)}, ${sqlString(row.unit)}, ${sqlString(row.category)}, ${sqlString(row.groupName)}, ${row.sortOrder})`)
+    .map((row) => `  (${sqlString(row.key)}, ${sqlString(row.name)}, ${sqlString(row.unit)}, ${sqlString(row.category)}, ${sqlString(row.groupName)}, ${row.subgroup ? sqlString(row.subgroup) : "null"}, ${row.isCore}, ${row.sortOrder})`)
     .join(",\n");
 
   writeFileSync(
@@ -56,14 +59,22 @@ function writeSeedSql(rows) {
 -- The nutrients table is the source of truth at runtime; the admin form reads it
 -- back through GET /nutrients, so whatever lands here is what an admin can record.
 
-insert into nutrients (key, name, unit, category, group_name, sort_order) values
+insert into nutrients (key, name, unit, category, group_name, subgroup, is_core, sort_order) values
 ${values}
 on conflict (key) do update set
   name = excluded.name,
   unit = excluded.unit,
   category = excluded.category,
   group_name = excluded.group_name,
+  subgroup = excluded.subgroup,
+  is_core = excluded.is_core,
   sort_order = excluded.sort_order;
+
+-- Dọn các chất không còn trong danh mục, kèm mọi lượng đã gắn với chúng.
+-- Chạy migrate-nutrients-v3.sql TRƯỚC để các khóa cũ được gộp chứ không bị mất.
+delete from food_item_nutrients where nutrient_id in (select id from nutrients where key <> all(${keyArray}));
+delete from meal_log_nutrients  where nutrient_id in (select id from nutrients where key <> all(${keyArray}));
+delete from nutrients where key <> all(${keyArray});
 
 -- Verify:
 select group_name, count(*) from nutrients group by group_name order by min(sort_order);
@@ -80,7 +91,7 @@ function writeRepositoryFallback(rows) {
   const end = source.indexOf("];", start) + 2;
 
   const entries = rows
-    .map((row) => `  { key: "${row.key}", name: "${row.name}", unit: "${row.unit}", category: "${row.category}", groupName: "${row.groupName}", sortOrder: ${row.sortOrder} },`)
+    .map((row) => `  { key: "${row.key}", name: "${row.name}", unit: "${row.unit}", category: "${row.category}", groupName: "${row.groupName}", subgroup: "${row.subgroup}", isCore: ${row.isCore}, sortOrder: ${row.sortOrder} },`)
     .join("\n");
 
   writeFileSync(REPOSITORY_PATH, `${source.slice(0, start)}${startMarker}\n${entries}\n];${source.slice(end)}`, "utf8");

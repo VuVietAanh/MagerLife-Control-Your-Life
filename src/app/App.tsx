@@ -5593,7 +5593,25 @@ function FoodAdminView({
     };
   }, []);
 
-  const nutrientsByGroup = nutrientCatalog.reduce<Record<string, NutrientDefinition[]>>((acc, definition) => {
+  /** Splits a group into its subgroups, preserving catalog order and keeping
+   *  unlabelled nutrients together in a leading block. */
+  function groupSubgroups(items: NutrientDefinition[]) {
+    const order: string[] = [];
+    const bySubgroup: Record<string, NutrientDefinition[]> = {};
+    items.forEach((definition) => {
+      const subgroup = definition.subgroup || "";
+      if (!bySubgroup[subgroup]) {
+        bySubgroup[subgroup] = [];
+        order.push(subgroup);
+      }
+      bySubgroup[subgroup].push(definition);
+    });
+    return order.map((subgroup) => ({ subgroup, items: bySubgroup[subgroup] }));
+  }
+
+  // Core macros have their own inputs above, so they're excluded here rather than
+  // offered twice and written through two different storage paths.
+  const nutrientsByGroup = nutrientCatalog.filter((definition) => !definition.isCore).reduce<Record<string, NutrientDefinition[]>>((acc, definition) => {
     const group = definition.groupName || "Khác";
     if (!acc[group]) acc[group] = [];
     acc[group].push(definition);
@@ -5654,7 +5672,7 @@ function FoodAdminView({
       carbsPer100g: Number(draft.carbsPer100g) || 0,
       fatPer100g: Number(draft.fatPer100g) || 0,
       fiberPer100g: Number(draft.fiberPer100g) || 0,
-      nutrients: nutrientCatalog.flatMap((definition) => {
+      nutrients: nutrientCatalog.filter((definition) => !definition.isCore).flatMap((definition) => {
         const amount = Number(extraNutrients[definition.key]);
         // Blank or zero means "not measured" rather than "contains none".
         if (!Number.isFinite(amount) || amount <= 0) return [];
@@ -5871,22 +5889,31 @@ function FoodAdminView({
                       </button>
 
                       {isOpen && (
-                        <div className="grid grid-cols-2 gap-2 border-t border-slate-100 bg-slate-50/60 p-2.5">
-                          {groupNutrients.map((definition) => (
-                            <label key={definition.key} className="block space-y-1">
-                              <span className="block text-[10px] font-bold leading-tight text-slate-500">
-                                {definition.name} <span className="font-medium text-slate-400">({definition.unit})</span>
-                              </span>
-                              <input
-                                value={extraNutrients[definition.key] || ""}
-                                onChange={(event) =>
-                                  setExtraNutrients((prev) => ({ ...prev, [definition.key]: event.target.value }))
-                                }
-                                inputMode="decimal"
-                                placeholder="0"
-                                className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-xs font-semibold outline-none focus:border-emerald-400"
-                              />
-                            </label>
+                        <div className="space-y-2.5 border-t border-slate-100 bg-slate-50/60 p-2.5">
+                          {groupSubgroups(groupNutrients).map(({ subgroup, items }) => (
+                            <div key={subgroup || "_"} className="space-y-1.5">
+                              {subgroup && (
+                                <p className="text-[9px] font-black uppercase tracking-wide text-slate-400">{subgroup}</p>
+                              )}
+                              <div className="grid grid-cols-2 gap-2">
+                                {items.map((definition) => (
+                                  <label key={definition.key} className="block space-y-1">
+                                    <span className="block text-[10px] font-bold leading-tight text-slate-500">
+                                      {definition.name} <span className="font-medium text-slate-400">({definition.unit})</span>
+                                    </span>
+                                    <input
+                                      value={extraNutrients[definition.key] || ""}
+                                      onChange={(event) =>
+                                        setExtraNutrients((prev) => ({ ...prev, [definition.key]: event.target.value }))
+                                      }
+                                      inputMode="decimal"
+                                      placeholder="0"
+                                      className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-xs font-semibold outline-none focus:border-emerald-400"
+                                    />
+                                  </label>
+                                ))}
+                              </div>
+                            </div>
                           ))}
                         </div>
                       )}
