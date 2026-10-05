@@ -1,5 +1,21 @@
 import type { FoodServingUnit } from "./nutritionResolver";
 
+export type NutrientCategory = "macro" | "mineral" | "vitamin" | "fatty_acid" | "amino_acid" | "other_compound" | "supplement";
+
+export type NutrientDefinition = {
+  key: string;
+  name: string;
+  unit: string;
+  category: NutrientCategory;
+  groupName?: string;
+  sortOrder?: number;
+};
+
+/** One nutrient measured on a food item: the definition plus how much of it the item holds. */
+export type FoodNutrientAmount = NutrientDefinition & {
+  amount: number;
+};
+
 export type FoodLibraryItem = {
   id: string;
   name: string;
@@ -11,6 +27,8 @@ export type FoodLibraryItem = {
   proteinPer100g?: number;
   fatPer100g?: number;
   fiberPer100g?: number;
+  /** Minerals, vitamins, fatty acids, supplements... beyond the five core macros. */
+  nutrients?: FoodNutrientAmount[];
   tags?: string[];
   source: "admin" | "user";
   ownerEmail?: string;

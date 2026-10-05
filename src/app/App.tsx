@@ -6,6 +6,7 @@ import {
   Brain,
   Calendar,
   Check,
+  ChevronDown,
   ChevronRight,
   Clock,
   CloudRain,
@@ -3132,6 +3133,85 @@ function parseNutritionMealFromChat(text: string, profile: UserProfile | null, a
   };
 }
 
+/**
+ * Shows the five core macros a user always wants at a glance, and hides everything
+ * else (minerals, vitamins, fatty acids, supplements) behind an expand toggle.
+ * Each extra nutrient is rendered with the unit stored alongside it in the catalog.
+ */
+function NutritionFactsPanel({ food }: { food: FoodLibraryItem }) {
+  const [expanded, setExpanded] = useState(false);
+
+  const coreMacros = [
+    { label: "Năng lượng", value: food.kcalPer100g || 0, unit: "kcal" },
+    { label: "Carbs", value: food.carbsPer100g || 0, unit: "g" },
+    { label: "Đạm", value: food.proteinPer100g || 0, unit: "g" },
+    { label: "Béo", value: food.fatPer100g || 0, unit: "g" },
+    { label: "Xơ", value: food.fiberPer100g || 0, unit: "g" },
+  ];
+
+  // Core macros already have their own row above, so don't repeat them in the detail list.
+  const CORE_KEYS = ["kcal", "carbs", "protein", "fat", "fiber"];
+  const extraNutrients = (food.nutrients || []).filter((item) => !CORE_KEYS.includes(item.key) && item.amount > 0);
+
+  const grouped = extraNutrients.reduce<Record<string, typeof extraNutrients>>((acc, item) => {
+    const group = item.groupName || "Khác";
+    if (!acc[group]) acc[group] = [];
+    acc[group].push(item);
+    return acc;
+  }, {});
+  const groupNames = Object.keys(grouped);
+
+  return (
+    <div className="space-y-2">
+      <div className="grid grid-cols-5 gap-1.5">
+        {coreMacros.map((macro) => (
+          <div key={macro.label} className="rounded-lg bg-white px-1.5 py-1.5 text-center">
+            <p className="text-[10px] font-semibold text-slate-400">{macro.label}</p>
+            <p className="text-xs font-black text-slate-800">
+              {macro.value}
+              <span className="ml-0.5 text-[9px] font-semibold text-slate-400">{macro.unit}</span>
+            </p>
+          </div>
+        ))}
+      </div>
+
+      {extraNutrients.length > 0 && (
+        <>
+          <button
+            type="button"
+            onClick={() => setExpanded((prev) => !prev)}
+            className="flex w-full items-center justify-center gap-1 rounded-lg border border-slate-200 bg-white py-1.5 text-[11px] font-bold text-slate-500 transition hover:border-emerald-300 hover:text-emerald-700"
+          >
+            {expanded ? "Thu gọn" : `Xem chi tiết (${extraNutrients.length} chất)`}
+            <ChevronDown className={`h-3 w-3 transition-transform ${expanded ? "rotate-180" : ""}`} />
+          </button>
+
+          {expanded && (
+            <div className="space-y-2.5 rounded-lg border border-slate-200 bg-white p-2.5">
+              {groupNames.map((groupName) => (
+                <div key={groupName}>
+                  <p className="mb-1 text-[10px] font-black uppercase tracking-wide text-slate-400">{groupName}</p>
+                  <div className="space-y-0.5">
+                    {grouped[groupName].map((item) => (
+                      <div key={item.key} className="flex items-baseline justify-between gap-2 text-[11px]">
+                        <span className="truncate text-slate-600">{item.name}</span>
+                        <span className="shrink-0 font-bold text-slate-800">
+                          {item.amount}
+                          <span className="ml-0.5 text-[9px] font-semibold text-slate-400">{item.unit}</span>
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 function NutritionDashboardCard({
   profile,
   insights,
@@ -3706,14 +3786,19 @@ function NutritionDashboardCard({
         {customFoods.length > 0 && (
           <div className="mt-4 space-y-2">
             {customFoods.slice(-4).map((food) => (
-              <div key={food.id} className="flex items-center justify-between gap-3 rounded-xl border border-slate-100 bg-slate-50 px-3 py-2 text-xs">
-                <div className="min-w-0">
-                  <p className="truncate font-black text-slate-800">{food.name}</p>
-                  <p className="text-slate-500">{food.kcalPer100g} kcal/100g · {food.proteinPer100g || 0}g đạm</p>
+              <div key={food.id} className="space-y-2 rounded-xl border border-slate-100 bg-slate-50 px-3 py-2 text-xs">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="truncate font-black text-slate-800">{food.name}</p>
+                    <p className="text-[10px] text-slate-400">
+                      trên {food.servingGram || 100}{food.servingUnit || "g"}
+                    </p>
+                  </div>
+                  <button type="button" onClick={() => deleteCustomFoodItem(food.id)} className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-rose-100 bg-white text-rose-500 hover:bg-rose-50">
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
                 </div>
-                <button type="button" onClick={() => deleteCustomFoodItem(food.id)} className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-rose-100 bg-white text-rose-500 hover:bg-rose-50">
-                  <Trash2 className="h-3.5 w-3.5" />
-                </button>
+                <NutritionFactsPanel food={food} />
               </div>
             ))}
           </div>
@@ -6500,6 +6585,29 @@ function shouldEnrichProfileWithApi(sourceText: string, patch: Partial<UserProfi
   return sourceText.length >= 16;
 }
 
+const AUTH_SESSION_STORAGE_KEY = "magerlife_session_profile_v1";
+
+/** localStorage can throw (private mode, blocked site data), so every access is guarded. */
+function readStoredSessionProfile(): UserProfile | null {
+  try {
+    const raw = window.localStorage.getItem(AUTH_SESSION_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed.email === "string" && parsed.email ? (parsed as UserProfile) : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeStoredSessionProfile(profile: UserProfile | null) {
+  try {
+    if (!profile) window.localStorage.removeItem(AUTH_SESSION_STORAGE_KEY);
+    else window.localStorage.setItem(AUTH_SESSION_STORAGE_KEY, JSON.stringify(profile));
+  } catch {
+    /* ignore: session just won't persist */
+  }
+}
+
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -6598,6 +6706,7 @@ export default function App() {
     setMemories(createMemoriesFromProfile(normalizedProfile));
     setTab("dashboard");
     setIsAuthenticated(true);
+    writeStoredSessionProfile(normalizedProfile);
     financeApiReadyRef.current = false;
     void getFinanceSnapshotFromApi({ userId: normalizedProfile.email }).then((result) => {
       if (result.ok && result.data?.financeSnapshot?.jars?.length) {
@@ -6768,7 +6877,20 @@ export default function App() {
     if (nextTab) setTab(nextTab);
   }
 
+  // Restore a previous session on first load so a refresh doesn't kick the user out.
+  useEffect(() => {
+    const storedProfile = readStoredSessionProfile();
+    if (storedProfile) completeAuth(storedProfile);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Keep the stored session in step with later profile edits.
+  useEffect(() => {
+    if (isAuthenticated && profile) writeStoredSessionProfile(profile);
+  }, [isAuthenticated, profile]);
+
   function handleLogout() {
+    writeStoredSessionProfile(null);
     setIsAuthenticated(false);
     setProfile(null);
     setJars(initialJars);

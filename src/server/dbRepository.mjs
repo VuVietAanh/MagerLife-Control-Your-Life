@@ -1,5 +1,30 @@
 import { createHmac, pbkdf2Sync, randomBytes, timingSafeEqual } from "node:crypto";
 
+// Mirrors the seeded rows of the `nutrients` table, used when running without Postgres.
+const FALLBACK_NUTRIENT_CATALOG = [
+  { key: "kcal", name: "Năng lượng", unit: "kcal", category: "macro", groupName: "Cơ bản", sortOrder: 1 },
+  { key: "carbs", name: "Carbohydrate", unit: "g", category: "macro", groupName: "Cơ bản", sortOrder: 2 },
+  { key: "protein", name: "Protein", unit: "g", category: "macro", groupName: "Cơ bản", sortOrder: 3 },
+  { key: "fat", name: "Chất béo", unit: "g", category: "macro", groupName: "Cơ bản", sortOrder: 4 },
+  { key: "fiber", name: "Chất xơ", unit: "g", category: "macro", groupName: "Cơ bản", sortOrder: 5 },
+  { key: "sugar", name: "Đường", unit: "g", category: "macro", groupName: "Carbohydrate", sortOrder: 10 },
+  { key: "saturated_fat", name: "Chất béo bão hòa", unit: "g", category: "fatty_acid", groupName: "Chất béo", sortOrder: 20 },
+  { key: "cholesterol", name: "Cholesterol", unit: "mg", category: "other_compound", groupName: "Chất béo", sortOrder: 24 },
+  { key: "sodium", name: "Natri", unit: "mg", category: "mineral", groupName: "Khoáng chất", sortOrder: 30 },
+  { key: "potassium", name: "Kali", unit: "mg", category: "mineral", groupName: "Khoáng chất", sortOrder: 31 },
+  { key: "calcium", name: "Canxi", unit: "mg", category: "mineral", groupName: "Khoáng chất", sortOrder: 32 },
+  { key: "iron", name: "Sắt", unit: "mg", category: "mineral", groupName: "Khoáng chất", sortOrder: 33 },
+  { key: "magnesium", name: "Magie", unit: "mg", category: "mineral", groupName: "Khoáng chất", sortOrder: 34 },
+  { key: "zinc", name: "Kẽm", unit: "mg", category: "mineral", groupName: "Khoáng chất", sortOrder: 35 },
+  { key: "vitamin_a", name: "Vitamin A", unit: "mcg", category: "vitamin", groupName: "Vitamin", sortOrder: 40 },
+  { key: "vitamin_c", name: "Vitamin C", unit: "mg", category: "vitamin", groupName: "Vitamin", sortOrder: 41 },
+  { key: "vitamin_d", name: "Vitamin D", unit: "mcg", category: "vitamin", groupName: "Vitamin", sortOrder: 42 },
+  { key: "vitamin_b12", name: "Vitamin B12", unit: "mcg", category: "vitamin", groupName: "Vitamin", sortOrder: 43 },
+  { key: "caffeine", name: "Caffeine", unit: "mg", category: "other_compound", groupName: "Hoạt chất khác", sortOrder: 60 },
+  { key: "creatine", name: "Creatine", unit: "g", category: "supplement", groupName: "Thực phẩm bổ sung", sortOrder: 70 },
+  { key: "l_citrulline", name: "L-Citrulline", unit: "g", category: "supplement", groupName: "Thực phẩm bổ sung", sortOrder: 71 },
+];
+
 function numberOrNull(value) {
   const number = Number(String(value ?? "").replace(",", "."));
   return Number.isFinite(number) ? number : null;
@@ -278,6 +303,9 @@ function createMemoryRepository() {
         return item.source === "admin";
       });
       return { items, serverTime: new Date().toISOString() };
+    },
+    async getNutrientCatalog() {
+      return { nutrients: FALLBACK_NUTRIENT_CATALOG, serverTime: new Date().toISOString() };
     },
     async upsertFoodLibrary({ items = [], userId } = {}) {
       const normalizedEmail = normalizeEmail(userId);
@@ -567,14 +595,51 @@ async function createPostgresRepository() {
     }
   }
 
+  let nutrientIdMapCache = null;
+
+  async function getNutrientIdMap() {
+    if (nutrientIdMapCache) return nutrientIdMapCache;
+    const result = await pool.query("select id, key from nutrients");
+    nutrientIdMapCache = new Map(result.rows.map((row) => [row.key, row.id]));
+    return nutrientIdMapCache;
+  }
+
+  async function selectNutrientCatalog() {
+    const result = await pool.query(
+      `
+      select key, name, unit, category, group_name as "groupName", sort_order as "sortOrder"
+      from nutrients
+      order by sort_order asc, name asc
+      `
+    );
+    return result.rows;
+  }
+
+  async function replaceFoodItemNutrients(foodItemId, nutrients) {
+    if (!foodItemId || !Array.isArray(nutrients) || !nutrients.length) return;
+    const idMap = await getNutrientIdMap();
+    for (const entry of nutrients) {
+      const nutrientId = idMap.get(entry?.key);
+      if (!nutrientId || entry.amount === null || entry.amount === undefined) continue;
+      await pool.query(
+        `
+        insert into food_item_nutrients (food_item_id, nutrient_id, amount)
+        values ($1,$2,$3)
+        on conflict (food_item_id, nutrient_id) do update set amount = excluded.amount
+        `,
+        [foodItemId, nutrientId, Number(entry.amount) || 0]
+      );
+    }
+  }
+
   async function upsertFoodLibrary(items = []) {
     for (const item of items) {
       const ownerUserId = item.source === "user" && item.ownerEmail ? await ensureUser({ email: item.ownerEmail }, item.ownerEmail) : null;
-      await pool.query(
+      const upserted = await pool.query(
         `
         insert into food_library_items (
-          external_id, owner_user_id, source, name, aliases, serving_amount, serving_unit, kcal_per_100,
-          carbs_per_100, protein_per_100, fat_per_100, fiber_per_100, tags, verified, updated_at
+          external_id, owner_user_id, source, name, aliases, serving_amount, serving_unit, kcal,
+          carbs, protein, fat, fiber, tags, verified, updated_at
         )
         values ($1,$2,$3,$4,$5::jsonb,$6,$7,$8,$9,$10,$11,$12,$13::jsonb,$14,now())
         on conflict (external_id) do update set
@@ -584,14 +649,15 @@ async function createPostgresRepository() {
           aliases = excluded.aliases,
           serving_amount = excluded.serving_amount,
           serving_unit = excluded.serving_unit,
-          kcal_per_100 = excluded.kcal_per_100,
-          carbs_per_100 = excluded.carbs_per_100,
-          protein_per_100 = excluded.protein_per_100,
-          fat_per_100 = excluded.fat_per_100,
-          fiber_per_100 = excluded.fiber_per_100,
+          kcal = excluded.kcal,
+          carbs = excluded.carbs,
+          protein = excluded.protein,
+          fat = excluded.fat,
+          fiber = excluded.fiber,
           tags = excluded.tags,
           verified = excluded.verified,
           updated_at = now()
+        returning id
         `,
         [
           item.id || null,
@@ -610,6 +676,7 @@ async function createPostgresRepository() {
           item.source === "admin",
         ]
       );
+      await replaceFoodItemNutrients(upserted.rows[0]?.id, item.nutrients);
     }
   }
 
@@ -633,11 +700,27 @@ async function createPostgresRepository() {
         f.aliases,
         f.serving_amount as "servingGram",
         f.serving_unit as "servingUnit",
-        f.kcal_per_100 as "kcalPer100g",
-        f.carbs_per_100 as "carbsPer100g",
-        f.protein_per_100 as "proteinPer100g",
-        f.fat_per_100 as "fatPer100g",
-        f.fiber_per_100 as "fiberPer100g",
+        f.kcal as "kcalPer100g",
+        f.carbs as "carbsPer100g",
+        f.protein as "proteinPer100g",
+        f.fat as "fatPer100g",
+        f.fiber as "fiberPer100g",
+        coalesce((
+          select json_agg(
+            json_build_object(
+              'key', n.key,
+              'name', n.name,
+              'unit', n.unit,
+              'category', n.category,
+              'groupName', n.group_name,
+              'amount', fin.amount
+            )
+            order by n.sort_order asc, n.name asc
+          )
+          from food_item_nutrients fin
+          join nutrients n on n.id = fin.nutrient_id
+          where fin.food_item_id = f.id
+        ), '[]'::json) as nutrients,
         f.tags,
         f.source,
         u.email as "ownerEmail",
@@ -658,6 +741,7 @@ async function createPostgresRepository() {
       proteinPer100g: Number(item.proteinPer100g || 0),
       fatPer100g: Number(item.fatPer100g || 0),
       fiberPer100g: Number(item.fiberPer100g || 0),
+      nutrients: (item.nutrients || []).map((entry) => ({ ...entry, amount: Number(entry.amount || 0) })),
       updatedAt: item.updatedAt instanceof Date ? item.updatedAt.toISOString() : item.updatedAt,
     }));
   }
@@ -913,6 +997,9 @@ async function createPostgresRepository() {
     },
     async getFoodLibrary(payload = {}) {
       return { items: await selectFoodLibrary(payload), serverTime: new Date().toISOString() };
+    },
+    async getNutrientCatalog() {
+      return { nutrients: await selectNutrientCatalog(), serverTime: new Date().toISOString() };
     },
     async upsertFoodLibrary({ items = [], userId } = {}) {
       const normalizedEmail = normalizeEmail(userId);

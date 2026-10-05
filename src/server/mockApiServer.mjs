@@ -500,6 +500,11 @@ export async function handleMagerLifeApiRequest(req, res) {
     return;
   }
 
+  if (req.method === "GET" && url.pathname === "/nutrients") {
+    sendRepositoryResult(req, res, await persistenceRepository.getNutrientCatalog());
+    return;
+  }
+
   if (req.method === "POST" && url.pathname === "/food-library") {
     if (!requireSession(req, res, body?.userId || "")) return;
     const validationError = validateFoodLibraryUpsert(body);
