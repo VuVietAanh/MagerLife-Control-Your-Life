@@ -2,27 +2,70 @@ import { createHmac, pbkdf2Sync, randomBytes, timingSafeEqual } from "node:crypt
 
 // Mirrors the seeded rows of the `nutrients` table, used when running without Postgres.
 const FALLBACK_NUTRIENT_CATALOG = [
-  { key: "kcal", name: "Năng lượng", unit: "kcal", category: "macro", groupName: "Cơ bản", sortOrder: 1 },
-  { key: "carbs", name: "Carbohydrate", unit: "g", category: "macro", groupName: "Cơ bản", sortOrder: 2 },
-  { key: "protein", name: "Protein", unit: "g", category: "macro", groupName: "Cơ bản", sortOrder: 3 },
-  { key: "fat", name: "Chất béo", unit: "g", category: "macro", groupName: "Cơ bản", sortOrder: 4 },
-  { key: "fiber", name: "Chất xơ", unit: "g", category: "macro", groupName: "Cơ bản", sortOrder: 5 },
-  { key: "sugar", name: "Đường", unit: "g", category: "macro", groupName: "Carbohydrate", sortOrder: 10 },
-  { key: "saturated_fat", name: "Chất béo bão hòa", unit: "g", category: "fatty_acid", groupName: "Chất béo", sortOrder: 20 },
+  { key: "sugar", name: "Đường tổng", unit: "g", category: "macro", groupName: "Carbohydrate", sortOrder: 10 },
+  { key: "added_sugar", name: "Đường bổ sung", unit: "g", category: "macro", groupName: "Carbohydrate", sortOrder: 11 },
+  { key: "starch", name: "Tinh bột", unit: "g", category: "macro", groupName: "Carbohydrate", sortOrder: 12 },
+  { key: "sugar_alcohol", name: "Rượu đường (polyol)", unit: "g", category: "macro", groupName: "Carbohydrate", sortOrder: 13 },
+  { key: "saturated_fat", name: "Béo bão hòa", unit: "g", category: "fatty_acid", groupName: "Chất béo", sortOrder: 20 },
+  { key: "monounsaturated_fat", name: "Béo không bão hòa đơn", unit: "g", category: "fatty_acid", groupName: "Chất béo", sortOrder: 21 },
+  { key: "polyunsaturated_fat", name: "Béo không bão hòa đa", unit: "g", category: "fatty_acid", groupName: "Chất béo", sortOrder: 22 },
+  { key: "trans_fat", name: "Béo chuyển hóa (trans)", unit: "g", category: "fatty_acid", groupName: "Chất béo", sortOrder: 23 },
   { key: "cholesterol", name: "Cholesterol", unit: "mg", category: "other_compound", groupName: "Chất béo", sortOrder: 24 },
+  { key: "omega_3", name: "Omega-3 tổng", unit: "mg", category: "fatty_acid", groupName: "Chất béo", sortOrder: 25 },
+  { key: "omega_6", name: "Omega-6 tổng", unit: "mg", category: "fatty_acid", groupName: "Chất béo", sortOrder: 26 },
+  { key: "epa", name: "EPA", unit: "mg", category: "fatty_acid", groupName: "Chất béo", sortOrder: 27 },
+  { key: "dha", name: "DHA", unit: "mg", category: "fatty_acid", groupName: "Chất béo", sortOrder: 28 },
   { key: "sodium", name: "Natri", unit: "mg", category: "mineral", groupName: "Khoáng chất", sortOrder: 30 },
   { key: "potassium", name: "Kali", unit: "mg", category: "mineral", groupName: "Khoáng chất", sortOrder: 31 },
   { key: "calcium", name: "Canxi", unit: "mg", category: "mineral", groupName: "Khoáng chất", sortOrder: 32 },
-  { key: "iron", name: "Sắt", unit: "mg", category: "mineral", groupName: "Khoáng chất", sortOrder: 33 },
-  { key: "magnesium", name: "Magie", unit: "mg", category: "mineral", groupName: "Khoáng chất", sortOrder: 34 },
-  { key: "zinc", name: "Kẽm", unit: "mg", category: "mineral", groupName: "Khoáng chất", sortOrder: 35 },
-  { key: "vitamin_a", name: "Vitamin A", unit: "mcg", category: "vitamin", groupName: "Vitamin", sortOrder: 40 },
-  { key: "vitamin_c", name: "Vitamin C", unit: "mg", category: "vitamin", groupName: "Vitamin", sortOrder: 41 },
-  { key: "vitamin_d", name: "Vitamin D", unit: "mcg", category: "vitamin", groupName: "Vitamin", sortOrder: 42 },
-  { key: "vitamin_b12", name: "Vitamin B12", unit: "mcg", category: "vitamin", groupName: "Vitamin", sortOrder: 43 },
-  { key: "caffeine", name: "Caffeine", unit: "mg", category: "other_compound", groupName: "Hoạt chất khác", sortOrder: 60 },
-  { key: "creatine", name: "Creatine", unit: "g", category: "supplement", groupName: "Thực phẩm bổ sung", sortOrder: 70 },
-  { key: "l_citrulline", name: "L-Citrulline", unit: "g", category: "supplement", groupName: "Thực phẩm bổ sung", sortOrder: 71 },
+  { key: "magnesium", name: "Magie", unit: "mg", category: "mineral", groupName: "Khoáng chất", sortOrder: 33 },
+  { key: "phosphorus", name: "Phốt pho", unit: "mg", category: "mineral", groupName: "Khoáng chất", sortOrder: 34 },
+  { key: "chloride", name: "Clorua", unit: "mg", category: "mineral", groupName: "Khoáng chất", sortOrder: 35 },
+  { key: "iron", name: "Sắt", unit: "mg", category: "mineral", groupName: "Khoáng vi lượng", sortOrder: 40 },
+  { key: "zinc", name: "Kẽm", unit: "mg", category: "mineral", groupName: "Khoáng vi lượng", sortOrder: 41 },
+  { key: "copper", name: "Đồng", unit: "mg", category: "mineral", groupName: "Khoáng vi lượng", sortOrder: 42 },
+  { key: "manganese", name: "Mangan", unit: "mg", category: "mineral", groupName: "Khoáng vi lượng", sortOrder: 43 },
+  { key: "selenium", name: "Selen", unit: "mcg", category: "mineral", groupName: "Khoáng vi lượng", sortOrder: 44 },
+  { key: "iodine", name: "I-ốt", unit: "mcg", category: "mineral", groupName: "Khoáng vi lượng", sortOrder: 45 },
+  { key: "chromium", name: "Crom", unit: "mcg", category: "mineral", groupName: "Khoáng vi lượng", sortOrder: 46 },
+  { key: "molybdenum", name: "Molypden", unit: "mcg", category: "mineral", groupName: "Khoáng vi lượng", sortOrder: 47 },
+  { key: "vitamin_c", name: "Vitamin C", unit: "mg", category: "vitamin", groupName: "Vitamin tan trong nước", sortOrder: 50 },
+  { key: "vitamin_b1", name: "B1 — Thiamin", unit: "mg", category: "vitamin", groupName: "Vitamin tan trong nước", sortOrder: 51 },
+  { key: "vitamin_b2", name: "B2 — Riboflavin", unit: "mg", category: "vitamin", groupName: "Vitamin tan trong nước", sortOrder: 52 },
+  { key: "vitamin_b3", name: "B3 — Niacin", unit: "mg", category: "vitamin", groupName: "Vitamin tan trong nước", sortOrder: 53 },
+  { key: "vitamin_b5", name: "B5 — Pantothenic", unit: "mg", category: "vitamin", groupName: "Vitamin tan trong nước", sortOrder: 54 },
+  { key: "vitamin_b6", name: "B6 — Pyridoxine", unit: "mg", category: "vitamin", groupName: "Vitamin tan trong nước", sortOrder: 55 },
+  { key: "vitamin_b7", name: "B7 — Biotin", unit: "mcg", category: "vitamin", groupName: "Vitamin tan trong nước", sortOrder: 56 },
+  { key: "vitamin_b9", name: "B9 — Folate", unit: "mcg", category: "vitamin", groupName: "Vitamin tan trong nước", sortOrder: 57 },
+  { key: "vitamin_b12", name: "B12 — Cobalamin", unit: "mcg", category: "vitamin", groupName: "Vitamin tan trong nước", sortOrder: 58 },
+  { key: "choline", name: "Choline", unit: "mg", category: "vitamin", groupName: "Vitamin tan trong nước", sortOrder: 59 },
+  { key: "vitamin_a", name: "Vitamin A", unit: "mcg", category: "vitamin", groupName: "Vitamin tan trong dầu", sortOrder: 60 },
+  { key: "vitamin_d", name: "Vitamin D", unit: "mcg", category: "vitamin", groupName: "Vitamin tan trong dầu", sortOrder: 61 },
+  { key: "vitamin_e", name: "Vitamin E", unit: "mg", category: "vitamin", groupName: "Vitamin tan trong dầu", sortOrder: 62 },
+  { key: "vitamin_k", name: "Vitamin K", unit: "mcg", category: "vitamin", groupName: "Vitamin tan trong dầu", sortOrder: 63 },
+  { key: "leucine", name: "Leucine (BCAA)", unit: "mg", category: "amino_acid", groupName: "Axit amin", sortOrder: 70 },
+  { key: "isoleucine", name: "Isoleucine (BCAA)", unit: "mg", category: "amino_acid", groupName: "Axit amin", sortOrder: 71 },
+  { key: "valine", name: "Valine (BCAA)", unit: "mg", category: "amino_acid", groupName: "Axit amin", sortOrder: 72 },
+  { key: "lysine", name: "Lysine", unit: "mg", category: "amino_acid", groupName: "Axit amin", sortOrder: 73 },
+  { key: "methionine", name: "Methionine", unit: "mg", category: "amino_acid", groupName: "Axit amin", sortOrder: 74 },
+  { key: "phenylalanine", name: "Phenylalanine", unit: "mg", category: "amino_acid", groupName: "Axit amin", sortOrder: 75 },
+  { key: "threonine", name: "Threonine", unit: "mg", category: "amino_acid", groupName: "Axit amin", sortOrder: 76 },
+  { key: "tryptophan", name: "Tryptophan", unit: "mg", category: "amino_acid", groupName: "Axit amin", sortOrder: 77 },
+  { key: "histidine", name: "Histidine", unit: "mg", category: "amino_acid", groupName: "Axit amin", sortOrder: 78 },
+  { key: "glutamine", name: "Glutamine", unit: "mg", category: "amino_acid", groupName: "Axit amin", sortOrder: 79 },
+  { key: "arginine", name: "Arginine", unit: "mg", category: "amino_acid", groupName: "Axit amin", sortOrder: 80 },
+  { key: "caffeine", name: "Caffeine", unit: "mg", category: "other_compound", groupName: "Hoạt chất khác", sortOrder: 90 },
+  { key: "theobromine", name: "Theobromine", unit: "mg", category: "other_compound", groupName: "Hoạt chất khác", sortOrder: 91 },
+  { key: "alcohol", name: "Cồn (ethanol)", unit: "g", category: "other_compound", groupName: "Hoạt chất khác", sortOrder: 92 },
+  { key: "water", name: "Nước", unit: "g", category: "other_compound", groupName: "Hoạt chất khác", sortOrder: 93 },
+  { key: "creatine", name: "Creatine", unit: "g", category: "supplement", groupName: "Thực phẩm bổ sung", sortOrder: 100 },
+  { key: "l_citrulline", name: "L-Citrulline", unit: "g", category: "supplement", groupName: "Thực phẩm bổ sung", sortOrder: 101 },
+  { key: "beta_alanine", name: "Beta-Alanine", unit: "g", category: "supplement", groupName: "Thực phẩm bổ sung", sortOrder: 102 },
+  { key: "taurine", name: "Taurine", unit: "mg", category: "supplement", groupName: "Thực phẩm bổ sung", sortOrder: 103 },
+  { key: "l_carnitine", name: "L-Carnitine", unit: "mg", category: "supplement", groupName: "Thực phẩm bổ sung", sortOrder: 104 },
+  { key: "collagen", name: "Collagen", unit: "g", category: "supplement", groupName: "Thực phẩm bổ sung", sortOrder: 105 },
+  { key: "glucosamine", name: "Glucosamine", unit: "mg", category: "supplement", groupName: "Thực phẩm bổ sung", sortOrder: 106 },
+  { key: "probiotics", name: "Probiotic", unit: "CFU", category: "supplement", groupName: "Thực phẩm bổ sung", sortOrder: 107 },
 ];
 
 function numberOrNull(value) {
@@ -615,40 +658,23 @@ async function createPostgresRepository() {
     return result.rows;
   }
 
-  const NUTRIENT_CATEGORIES = new Set(["macro", "mineral", "vitamin", "fatty_acid", "amino_acid", "other_compound", "supplement"]);
-
   /**
-   * Resolves a nutrient key to its catalog row, registering the definition first if the
-   * catalog doesn't know it yet. Without this, a nutrient the client knows about but the
-   * database hasn't been seeded with would be dropped on save with no error shown — the
-   * admin would type a value, see it accepted, and find it gone on the next read.
+   * The nutrients table is the source of truth for what can be recorded. A key that
+   * isn't in it is a real mismatch between the client and the database — most likely
+   * the catalog seed hasn't been applied — so it's reported back to the caller rather
+   * than silently dropped or quietly invented.
    */
-  async function resolveNutrientId(entry) {
-    const idMap = await getNutrientIdMap();
-    const existing = idMap.get(entry.key);
-    if (existing) return existing;
-
-    const category = NUTRIENT_CATEGORIES.has(entry.category) ? entry.category : "other_compound";
-    const inserted = await pool.query(
-      `
-      insert into nutrients (key, name, unit, category, group_name, sort_order)
-      values ($1,$2,$3,$4,$5,$6)
-      on conflict (key) do update set name = excluded.name, unit = excluded.unit
-      returning id
-      `,
-      [entry.key, entry.name || entry.key, entry.unit || "g", category, entry.groupName || null, entry.sortOrder || 999]
-    );
-    const nutrientId = inserted.rows[0]?.id;
-    if (nutrientId) idMap.set(entry.key, nutrientId);
-    return nutrientId;
-  }
-
   async function replaceFoodItemNutrients(foodItemId, nutrients) {
-    if (!foodItemId || !Array.isArray(nutrients) || !nutrients.length) return;
+    if (!foodItemId || !Array.isArray(nutrients) || !nutrients.length) return [];
+    const idMap = await getNutrientIdMap();
+    const unknownKeys = [];
     for (const entry of nutrients) {
       if (!entry?.key || entry.amount === null || entry.amount === undefined) continue;
-      const nutrientId = await resolveNutrientId(entry);
-      if (!nutrientId) continue;
+      const nutrientId = idMap.get(entry.key);
+      if (!nutrientId) {
+        unknownKeys.push(entry.key);
+        continue;
+      }
       await pool.query(
         `
         insert into food_item_nutrients (food_item_id, nutrient_id, amount)
@@ -658,9 +684,17 @@ async function createPostgresRepository() {
         [foodItemId, nutrientId, Number(entry.amount) || 0]
       );
     }
+    if (unknownKeys.length) {
+      console.warn(
+        `Nutrient keys missing from the catalog, amounts not stored: ${unknownKeys.join(", ")}. ` +
+          "Apply docs/database/seed-nutrients.sql to the database."
+      );
+    }
+    return unknownKeys;
   }
 
   async function upsertFoodLibrary(items = []) {
+    const unknownNutrientKeys = new Set();
     for (const item of items) {
       const ownerUserId = item.source === "user" && item.ownerEmail ? await ensureUser({ email: item.ownerEmail }, item.ownerEmail) : null;
       const upserted = await pool.query(
@@ -704,8 +738,10 @@ async function createPostgresRepository() {
           item.source === "admin",
         ]
       );
-      await replaceFoodItemNutrients(upserted.rows[0]?.id, item.nutrients);
+      const unknown = await replaceFoodItemNutrients(upserted.rows[0]?.id, item.nutrients);
+      unknown.forEach((key) => unknownNutrientKeys.add(key));
     }
+    return [...unknownNutrientKeys];
   }
 
   async function selectFoodLibrary({ scope = "admin", userId } = {}) {
@@ -1032,8 +1068,15 @@ async function createPostgresRepository() {
     async upsertFoodLibrary({ items = [], userId } = {}) {
       const normalizedEmail = normalizeEmail(userId);
       const incoming = normalizeFoodItems(items).map((item) => item.source === "user" ? { ...item, ownerEmail: item.ownerEmail || normalizedEmail } : item);
-      await upsertFoodLibrary(incoming);
-      return { accepted: incoming.length, items: incoming, serverTime: new Date().toISOString() };
+      const unknownNutrientKeys = await upsertFoodLibrary(incoming);
+      return {
+        accepted: incoming.length,
+        items: incoming,
+        // Non-empty means the client offered a nutrient the catalog doesn't define,
+        // so the admin learns the value wasn't stored instead of discovering it later.
+        unknownNutrientKeys,
+        serverTime: new Date().toISOString(),
+      };
     },
     async getFinanceSnapshot(userId) {
       return { financeSnapshot: await selectFinanceSnapshot(userId) };

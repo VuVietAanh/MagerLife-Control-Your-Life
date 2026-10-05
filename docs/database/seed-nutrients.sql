@@ -1,0 +1,82 @@
+-- Nutrient catalog seed for MagerLife — GENERATED FILE, DO NOT EDIT BY HAND.
+-- Regenerate with: node scripts/generate-nutrient-artifacts.mjs
+-- Source: NUTRIENT_CATALOG in src/app/services/foodLibraryService.ts
+--
+-- Safe to re-run: existing keys are updated in place, nothing is deleted.
+-- The nutrients table is the source of truth at runtime; the admin form reads it
+-- back through GET /nutrients, so whatever lands here is what an admin can record.
+
+insert into nutrients (key, name, unit, category, group_name, sort_order) values
+  ('sugar', 'Đường tổng', 'g', 'macro', 'Carbohydrate', 10),
+  ('added_sugar', 'Đường bổ sung', 'g', 'macro', 'Carbohydrate', 11),
+  ('starch', 'Tinh bột', 'g', 'macro', 'Carbohydrate', 12),
+  ('sugar_alcohol', 'Rượu đường (polyol)', 'g', 'macro', 'Carbohydrate', 13),
+  ('saturated_fat', 'Béo bão hòa', 'g', 'fatty_acid', 'Chất béo', 20),
+  ('monounsaturated_fat', 'Béo không bão hòa đơn', 'g', 'fatty_acid', 'Chất béo', 21),
+  ('polyunsaturated_fat', 'Béo không bão hòa đa', 'g', 'fatty_acid', 'Chất béo', 22),
+  ('trans_fat', 'Béo chuyển hóa (trans)', 'g', 'fatty_acid', 'Chất béo', 23),
+  ('cholesterol', 'Cholesterol', 'mg', 'other_compound', 'Chất béo', 24),
+  ('omega_3', 'Omega-3 tổng', 'mg', 'fatty_acid', 'Chất béo', 25),
+  ('omega_6', 'Omega-6 tổng', 'mg', 'fatty_acid', 'Chất béo', 26),
+  ('epa', 'EPA', 'mg', 'fatty_acid', 'Chất béo', 27),
+  ('dha', 'DHA', 'mg', 'fatty_acid', 'Chất béo', 28),
+  ('sodium', 'Natri', 'mg', 'mineral', 'Khoáng chất', 30),
+  ('potassium', 'Kali', 'mg', 'mineral', 'Khoáng chất', 31),
+  ('calcium', 'Canxi', 'mg', 'mineral', 'Khoáng chất', 32),
+  ('magnesium', 'Magie', 'mg', 'mineral', 'Khoáng chất', 33),
+  ('phosphorus', 'Phốt pho', 'mg', 'mineral', 'Khoáng chất', 34),
+  ('chloride', 'Clorua', 'mg', 'mineral', 'Khoáng chất', 35),
+  ('iron', 'Sắt', 'mg', 'mineral', 'Khoáng vi lượng', 40),
+  ('zinc', 'Kẽm', 'mg', 'mineral', 'Khoáng vi lượng', 41),
+  ('copper', 'Đồng', 'mg', 'mineral', 'Khoáng vi lượng', 42),
+  ('manganese', 'Mangan', 'mg', 'mineral', 'Khoáng vi lượng', 43),
+  ('selenium', 'Selen', 'mcg', 'mineral', 'Khoáng vi lượng', 44),
+  ('iodine', 'I-ốt', 'mcg', 'mineral', 'Khoáng vi lượng', 45),
+  ('chromium', 'Crom', 'mcg', 'mineral', 'Khoáng vi lượng', 46),
+  ('molybdenum', 'Molypden', 'mcg', 'mineral', 'Khoáng vi lượng', 47),
+  ('vitamin_c', 'Vitamin C', 'mg', 'vitamin', 'Vitamin tan trong nước', 50),
+  ('vitamin_b1', 'B1 — Thiamin', 'mg', 'vitamin', 'Vitamin tan trong nước', 51),
+  ('vitamin_b2', 'B2 — Riboflavin', 'mg', 'vitamin', 'Vitamin tan trong nước', 52),
+  ('vitamin_b3', 'B3 — Niacin', 'mg', 'vitamin', 'Vitamin tan trong nước', 53),
+  ('vitamin_b5', 'B5 — Pantothenic', 'mg', 'vitamin', 'Vitamin tan trong nước', 54),
+  ('vitamin_b6', 'B6 — Pyridoxine', 'mg', 'vitamin', 'Vitamin tan trong nước', 55),
+  ('vitamin_b7', 'B7 — Biotin', 'mcg', 'vitamin', 'Vitamin tan trong nước', 56),
+  ('vitamin_b9', 'B9 — Folate', 'mcg', 'vitamin', 'Vitamin tan trong nước', 57),
+  ('vitamin_b12', 'B12 — Cobalamin', 'mcg', 'vitamin', 'Vitamin tan trong nước', 58),
+  ('choline', 'Choline', 'mg', 'vitamin', 'Vitamin tan trong nước', 59),
+  ('vitamin_a', 'Vitamin A', 'mcg', 'vitamin', 'Vitamin tan trong dầu', 60),
+  ('vitamin_d', 'Vitamin D', 'mcg', 'vitamin', 'Vitamin tan trong dầu', 61),
+  ('vitamin_e', 'Vitamin E', 'mg', 'vitamin', 'Vitamin tan trong dầu', 62),
+  ('vitamin_k', 'Vitamin K', 'mcg', 'vitamin', 'Vitamin tan trong dầu', 63),
+  ('leucine', 'Leucine (BCAA)', 'mg', 'amino_acid', 'Axit amin', 70),
+  ('isoleucine', 'Isoleucine (BCAA)', 'mg', 'amino_acid', 'Axit amin', 71),
+  ('valine', 'Valine (BCAA)', 'mg', 'amino_acid', 'Axit amin', 72),
+  ('lysine', 'Lysine', 'mg', 'amino_acid', 'Axit amin', 73),
+  ('methionine', 'Methionine', 'mg', 'amino_acid', 'Axit amin', 74),
+  ('phenylalanine', 'Phenylalanine', 'mg', 'amino_acid', 'Axit amin', 75),
+  ('threonine', 'Threonine', 'mg', 'amino_acid', 'Axit amin', 76),
+  ('tryptophan', 'Tryptophan', 'mg', 'amino_acid', 'Axit amin', 77),
+  ('histidine', 'Histidine', 'mg', 'amino_acid', 'Axit amin', 78),
+  ('glutamine', 'Glutamine', 'mg', 'amino_acid', 'Axit amin', 79),
+  ('arginine', 'Arginine', 'mg', 'amino_acid', 'Axit amin', 80),
+  ('caffeine', 'Caffeine', 'mg', 'other_compound', 'Hoạt chất khác', 90),
+  ('theobromine', 'Theobromine', 'mg', 'other_compound', 'Hoạt chất khác', 91),
+  ('alcohol', 'Cồn (ethanol)', 'g', 'other_compound', 'Hoạt chất khác', 92),
+  ('water', 'Nước', 'g', 'other_compound', 'Hoạt chất khác', 93),
+  ('creatine', 'Creatine', 'g', 'supplement', 'Thực phẩm bổ sung', 100),
+  ('l_citrulline', 'L-Citrulline', 'g', 'supplement', 'Thực phẩm bổ sung', 101),
+  ('beta_alanine', 'Beta-Alanine', 'g', 'supplement', 'Thực phẩm bổ sung', 102),
+  ('taurine', 'Taurine', 'mg', 'supplement', 'Thực phẩm bổ sung', 103),
+  ('l_carnitine', 'L-Carnitine', 'mg', 'supplement', 'Thực phẩm bổ sung', 104),
+  ('collagen', 'Collagen', 'g', 'supplement', 'Thực phẩm bổ sung', 105),
+  ('glucosamine', 'Glucosamine', 'mg', 'supplement', 'Thực phẩm bổ sung', 106),
+  ('probiotics', 'Probiotic', 'CFU', 'supplement', 'Thực phẩm bổ sung', 107)
+on conflict (key) do update set
+  name = excluded.name,
+  unit = excluded.unit,
+  category = excluded.category,
+  group_name = excluded.group_name,
+  sort_order = excluded.sort_order;
+
+-- Verify:
+select group_name, count(*) from nutrients group by group_name order by min(sort_order);

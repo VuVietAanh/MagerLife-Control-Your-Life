@@ -179,6 +179,15 @@ export async function getFoodLibraryFromApi({
   );
 }
 
+/**
+ * The nutrients table is the single source of truth for what an admin can record,
+ * so the entry form reads the catalog from here rather than from a bundled list
+ * that would silently drift from the database.
+ */
+export async function getNutrientCatalogFromApi(options?: ApiClientOptions) {
+  return callMagerLifeApi("GET /nutrients", {}, options);
+}
+
 export async function saveFoodLibraryToApi({
   userId,
   items,

@@ -1,5 +1,5 @@
 import type { AgentEvent } from "./agentEventService";
-import type { FoodLibraryItem } from "./foodLibraryService";
+import type { FoodLibraryItem, NutrientDefinition } from "./foodLibraryService";
 import type { MoneyCurrency } from "../models/finance";
 import type { NutritionMealLog } from "../models/nutrition";
 import type { UserProfile } from "../models/profile";
@@ -123,6 +123,11 @@ export type FoodLibraryRequest = {
 
 export type FoodLibraryResponse = {
   items: FoodLibraryItem[];
+  serverTime: string;
+};
+
+export type NutrientCatalogResponse = {
+  nutrients: NutrientDefinition[];
   serverTime: string;
 };
 
@@ -348,6 +353,10 @@ export type ApiEndpointMap = {
   "POST /food-library": {
     request: FoodLibraryUpsertRequest;
     response: FoodLibraryUpsertResponse;
+  };
+  "GET /nutrients": {
+    request: Record<string, never>;
+    response: NutrientCatalogResponse;
   };
   "GET /finance/snapshot": {
     request: FinanceSnapshotRequest;

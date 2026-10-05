@@ -69,6 +69,7 @@ import {
   NUTRIENT_CATALOG,
   saveAdminFoodLibrary,
   type FoodLibraryItem,
+  type NutrientDefinition,
 } from "./services/foodLibraryService";
 import { buildMealBudgetPlan } from "./services/mealBudgetService";
 import {
@@ -89,7 +90,7 @@ import {
 } from "./services/profileService";
 import { buildAgentTrainingSamples, serializeTrainingSamplesAsJsonl } from "./services/trainingDatasetService";
 import { MAGERLIFE_API_BASE_URL } from "./services/apiConfig";
-import { getAdminAnalyticsFromApi, getApiDbHealth, getApiHealth, getFinanceSnapshotFromApi, getFoodLibraryFromApi, logNutritionMealToApi, loginAccountViaApi, registerAccountViaApi, saveFinanceSnapshotToApi, saveFoodLibraryToApi, saveProfileToApi, sendChatTurnToApi, syncAgentEventsToApi, syncPersistenceSnapshotToApi, updateProfileViaApi } from "./services/magerLifeApiFacade";
+import { getAdminAnalyticsFromApi, getApiDbHealth, getApiHealth, getFinanceSnapshotFromApi, getFoodLibraryFromApi, getNutrientCatalogFromApi, logNutritionMealToApi, loginAccountViaApi, registerAccountViaApi, saveFinanceSnapshotToApi, saveFoodLibraryToApi, saveProfileToApi, sendChatTurnToApi, syncAgentEventsToApi, syncPersistenceSnapshotToApi, updateProfileViaApi } from "./services/magerLifeApiFacade";
 import { fetchWeatherForecast, resolveManualWeatherPlace, type WeatherPlace } from "./services/weatherService";
 
 type Tab = "dashboard" | "finance" | "onboarding" | "account" | "admin" | "brain" | "routing" | "food-admin";
@@ -5561,15 +5562,38 @@ function FoodAdminView({
   // held as strings so a half-typed value doesn't get coerced to NaN mid-edit.
   const [extraNutrients, setExtraNutrients] = useState<Record<string, string>>({});
   const [nutrientsExpanded, setNutrientsExpanded] = useState(false);
-  // Only one group stays open at a time, so 64 fields never land on screen together.
+  // Only one group stays open at a time, so the full catalog never lands on screen together.
   const [openNutrientGroup, setOpenNutrientGroup] = useState<string | null>(null);
+  // The catalog comes from the database, so the form can only offer what the
+  // nutrients table actually holds — a bundled list would drift out of sync.
+  const [nutrientCatalog, setNutrientCatalog] = useState<NutrientDefinition[]>([]);
+  const [catalogState, setCatalogState] = useState<"loading" | "ready" | "offline">("loading");
   const [query, setQuery] = useState("");
   const [editingFoodId, setEditingFoodId] = useState<string | null>(null);
   const [foodFormError, setFoodFormError] = useState("");
   const foodImportRef = useRef<HTMLInputElement | null>(null);
   const pendingFoodRequests = profile?.pendingNutritionApiRequests?.filter((request) => request.status === "pending") || [];
 
-  const nutrientsByGroup = NUTRIENT_CATALOG.reduce<Record<string, typeof NUTRIENT_CATALOG>>((acc, definition) => {
+  useEffect(() => {
+    let cancelled = false;
+    void getNutrientCatalogFromApi().then((result) => {
+      if (cancelled) return;
+      if (result.ok && result.data?.nutrients?.length) {
+        setNutrientCatalog(result.data.nutrients);
+        setCatalogState("ready");
+        return;
+      }
+      // Fall back to the bundled seed so an admin isn't blocked, but say so plainly
+      // rather than passing stale data off as the live catalog.
+      setNutrientCatalog(NUTRIENT_CATALOG);
+      setCatalogState("offline");
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const nutrientsByGroup = nutrientCatalog.reduce<Record<string, NutrientDefinition[]>>((acc, definition) => {
     const group = definition.groupName || "Khác";
     if (!acc[group]) acc[group] = [];
     acc[group].push(definition);
@@ -5630,7 +5654,7 @@ function FoodAdminView({
       carbsPer100g: Number(draft.carbsPer100g) || 0,
       fatPer100g: Number(draft.fatPer100g) || 0,
       fiberPer100g: Number(draft.fiberPer100g) || 0,
-      nutrients: NUTRIENT_CATALOG.flatMap((definition) => {
+      nutrients: nutrientCatalog.flatMap((definition) => {
         const amount = Number(extraNutrients[definition.key]);
         // Blank or zero means "not measured" rather than "contains none".
         if (!Number.isFinite(amount) || amount <= 0) return [];
@@ -5676,7 +5700,7 @@ function FoodAdminView({
     setNutrientsExpanded(hasStored);
     setOpenNutrientGroup(
       hasStored
-        ? NUTRIENT_CATALOG.find((definition) => Number(storedAmounts[definition.key]) > 0)?.groupName || null
+        ? nutrientCatalog.find((definition) => Number(storedAmounts[definition.key]) > 0)?.groupName || null
         : null
     );
   }
@@ -5802,7 +5826,9 @@ function FoodAdminView({
               <span>
                 <span className="block text-[11px] font-black text-slate-700">Chất dinh dưỡng khác</span>
                 <span className="block text-[10px] font-medium text-slate-400">
-                  Khoáng chất, vitamin, hoạt chất, thực phẩm bổ sung — điền chất nào biết, bỏ trống phần còn lại.
+                  {catalogState === "loading"
+                    ? "Đang tải danh mục từ cơ sở dữ liệu..."
+                    : `${nutrientCatalog.length} chất trong ${nutrientGroupNames.length} nhóm — điền chất nào biết, bỏ trống phần còn lại.`}
                 </span>
               </span>
               <span className="flex shrink-0 items-center gap-1 rounded-lg border border-slate-200 bg-white px-2 py-1 text-[10px] font-black text-slate-500">
@@ -5811,6 +5837,13 @@ function FoodAdminView({
                 <ChevronDown className={`h-3 w-3 transition-transform ${nutrientsExpanded ? "rotate-180" : ""}`} />
               </span>
             </button>
+
+            {nutrientsExpanded && catalogState === "offline" && (
+              <p className="rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-2 text-[10px] font-bold leading-relaxed text-amber-800">
+                Không đọc được danh mục từ cơ sở dữ liệu, đang dùng bản dự phòng đi kèm ứng dụng.
+                Danh sách dưới đây có thể khác với dữ liệu thật trên server.
+              </p>
+            )}
 
             {nutrientsExpanded && (
               <div className="space-y-1.5 border-t border-slate-200 pt-3">
