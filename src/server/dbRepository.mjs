@@ -615,12 +615,40 @@ async function createPostgresRepository() {
     return result.rows;
   }
 
+  const NUTRIENT_CATEGORIES = new Set(["macro", "mineral", "vitamin", "fatty_acid", "amino_acid", "other_compound", "supplement"]);
+
+  /**
+   * Resolves a nutrient key to its catalog row, registering the definition first if the
+   * catalog doesn't know it yet. Without this, a nutrient the client knows about but the
+   * database hasn't been seeded with would be dropped on save with no error shown — the
+   * admin would type a value, see it accepted, and find it gone on the next read.
+   */
+  async function resolveNutrientId(entry) {
+    const idMap = await getNutrientIdMap();
+    const existing = idMap.get(entry.key);
+    if (existing) return existing;
+
+    const category = NUTRIENT_CATEGORIES.has(entry.category) ? entry.category : "other_compound";
+    const inserted = await pool.query(
+      `
+      insert into nutrients (key, name, unit, category, group_name, sort_order)
+      values ($1,$2,$3,$4,$5,$6)
+      on conflict (key) do update set name = excluded.name, unit = excluded.unit
+      returning id
+      `,
+      [entry.key, entry.name || entry.key, entry.unit || "g", category, entry.groupName || null, entry.sortOrder || 999]
+    );
+    const nutrientId = inserted.rows[0]?.id;
+    if (nutrientId) idMap.set(entry.key, nutrientId);
+    return nutrientId;
+  }
+
   async function replaceFoodItemNutrients(foodItemId, nutrients) {
     if (!foodItemId || !Array.isArray(nutrients) || !nutrients.length) return;
-    const idMap = await getNutrientIdMap();
     for (const entry of nutrients) {
-      const nutrientId = idMap.get(entry?.key);
-      if (!nutrientId || entry.amount === null || entry.amount === undefined) continue;
+      if (!entry?.key || entry.amount === null || entry.amount === undefined) continue;
+      const nutrientId = await resolveNutrientId(entry);
+      if (!nutrientId) continue;
       await pool.query(
         `
         insert into food_item_nutrients (food_item_id, nutrient_id, amount)

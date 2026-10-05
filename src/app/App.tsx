@@ -5561,6 +5561,8 @@ function FoodAdminView({
   // held as strings so a half-typed value doesn't get coerced to NaN mid-edit.
   const [extraNutrients, setExtraNutrients] = useState<Record<string, string>>({});
   const [nutrientsExpanded, setNutrientsExpanded] = useState(false);
+  // Only one group stays open at a time, so 64 fields never land on screen together.
+  const [openNutrientGroup, setOpenNutrientGroup] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [editingFoodId, setEditingFoodId] = useState<string | null>(null);
   const [foodFormError, setFoodFormError] = useState("");
@@ -5584,6 +5586,7 @@ function FoodAdminView({
     setDraft({ name: "", aliases: "", servingGram: "100", servingUnit: "g", kcalPer100g: "", proteinPer100g: "", carbsPer100g: "", fatPer100g: "", fiberPer100g: "", tags: "" });
     setExtraNutrients({});
     setNutrientsExpanded(false);
+    setOpenNutrientGroup(null);
     setEditingFoodId(null);
     setFoodFormError("");
   }
@@ -5669,7 +5672,13 @@ function FoodAdminView({
       storedAmounts[entry.key] = String(entry.amount);
     });
     setExtraNutrients(storedAmounts);
-    setNutrientsExpanded(Object.keys(storedAmounts).length > 0);
+    const hasStored = Object.keys(storedAmounts).length > 0;
+    setNutrientsExpanded(hasStored);
+    setOpenNutrientGroup(
+      hasStored
+        ? NUTRIENT_CATALOG.find((definition) => Number(storedAmounts[definition.key]) > 0)?.groupName || null
+        : null
+    );
   }
 
   function exportFoodLibrary() {
@@ -5804,30 +5813,53 @@ function FoodAdminView({
             </button>
 
             {nutrientsExpanded && (
-              <div className="space-y-3 border-t border-slate-200 pt-3">
-                {nutrientGroupNames.map((groupName) => (
-                  <div key={groupName} className="space-y-1.5">
-                    <p className="text-[10px] font-black uppercase tracking-wide text-slate-400">{groupName}</p>
-                    <div className="grid grid-cols-2 gap-2">
-                      {nutrientsByGroup[groupName].map((definition) => (
-                        <label key={definition.key} className="block space-y-1">
-                          <span className="text-[10px] font-bold text-slate-500">
-                            {definition.name} <span className="font-medium text-slate-400">({definition.unit})</span>
-                          </span>
-                          <input
-                            value={extraNutrients[definition.key] || ""}
-                            onChange={(event) =>
-                              setExtraNutrients((prev) => ({ ...prev, [definition.key]: event.target.value }))
-                            }
-                            inputMode="decimal"
-                            placeholder="0"
-                            className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-xs font-semibold outline-none focus:border-emerald-400"
-                          />
-                        </label>
-                      ))}
+              <div className="space-y-1.5 border-t border-slate-200 pt-3">
+                {nutrientGroupNames.map((groupName) => {
+                  const groupNutrients = nutrientsByGroup[groupName];
+                  const filledInGroup = groupNutrients.filter((definition) => Number(extraNutrients[definition.key]) > 0).length;
+                  const isOpen = openNutrientGroup === groupName;
+                  return (
+                    <div key={groupName} className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+                      <button
+                        type="button"
+                        onClick={() => setOpenNutrientGroup(isOpen ? null : groupName)}
+                        className="flex w-full items-center justify-between gap-2 px-2.5 py-2 text-left transition hover:bg-slate-50"
+                      >
+                        <span className="text-[11px] font-black text-slate-700">{groupName}</span>
+                        <span className="flex shrink-0 items-center gap-1.5">
+                          {filledInGroup > 0 && (
+                            <span className="rounded-full bg-emerald-100 px-1.5 py-0.5 text-[9px] font-black text-emerald-700">
+                              {filledInGroup}
+                            </span>
+                          )}
+                          <span className="text-[9px] font-bold text-slate-400">{groupNutrients.length} chất</span>
+                          <ChevronDown className={`h-3 w-3 text-slate-400 transition-transform ${isOpen ? "rotate-180" : ""}`} />
+                        </span>
+                      </button>
+
+                      {isOpen && (
+                        <div className="grid grid-cols-2 gap-2 border-t border-slate-100 bg-slate-50/60 p-2.5">
+                          {groupNutrients.map((definition) => (
+                            <label key={definition.key} className="block space-y-1">
+                              <span className="block text-[10px] font-bold leading-tight text-slate-500">
+                                {definition.name} <span className="font-medium text-slate-400">({definition.unit})</span>
+                              </span>
+                              <input
+                                value={extraNutrients[definition.key] || ""}
+                                onChange={(event) =>
+                                  setExtraNutrients((prev) => ({ ...prev, [definition.key]: event.target.value }))
+                                }
+                                inputMode="decimal"
+                                placeholder="0"
+                                className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-xs font-semibold outline-none focus:border-emerald-400"
+                              />
+                            </label>
+                          ))}
+                        </div>
+                      )}
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
