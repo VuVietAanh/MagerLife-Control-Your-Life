@@ -1,6 +1,6 @@
 import type { FoodServingUnit } from "./nutritionResolver";
 
-export type NutrientCategory = "macro" | "mineral" | "vitamin" | "fatty_acid" | "amino_acid" | "other_compound" | "supplement";
+export type NutrientCategory = "macro" | "mineral" | "vitamin" | "fatty_acid" | "amino_acid" | "other_compound" | "supplement" | "bioactive";
 
 export type NutrientDefinition = {
   key: string;
@@ -38,6 +38,8 @@ export type FoodLibraryItem = {
   fiberPer100g?: number;
   /** Minerals, vitamins, fatty acids, supplements... beyond the five core macros. */
   nutrients?: FoodNutrientAmount[];
+  /** Live cultures, counted separately from nutrients — see ProbioticStrain. */
+  probiotics?: FoodProbioticAmount[];
   tags?: string[];
   source: "admin" | "user";
   ownerEmail?: string;
@@ -158,7 +160,58 @@ export const NUTRIENT_CATALOG: NutrientDefinition[] = [
   { key: "msm", name: "MSM", unit: "mg", category: "supplement", groupName: "Thực phẩm bổ sung", subgroup: "Khớp", isCore: false, sortOrder: 129 },
   { key: "coq10", name: "Coenzyme Q10", unit: "mg", category: "supplement", groupName: "Thực phẩm bổ sung", subgroup: "Sức khỏe chung", isCore: false, sortOrder: 130 },
   { key: "inositol", name: "Inositol", unit: "mg", category: "supplement", groupName: "Thực phẩm bổ sung", subgroup: "Sức khỏe chung", isCore: false, sortOrder: 131 },
-  { key: "probiotics", name: "Probiotic tổng", unit: "CFU", category: "supplement", groupName: "Thực phẩm bổ sung", subgroup: "Sức khỏe chung", isCore: false, sortOrder: 132 },
+
+  // --- Hoạt chất sinh học: không phải chất dinh dưỡng thiết yếu (không có nhu cầu
+  //     khuyến nghị hằng ngày), nên tách thành category riêng để không bị gộp vào
+  //     các phép tính "đã nạp đủ chưa".
+  { key: "curcumin", name: "Curcumin", unit: "mg", category: "bioactive", groupName: "Hoạt chất sinh học", subgroup: "Polyphenol", isCore: false, sortOrder: 140 },
+  { key: "resveratrol", name: "Resveratrol", unit: "mg", category: "bioactive", groupName: "Hoạt chất sinh học", subgroup: "Polyphenol", isCore: false, sortOrder: 141 },
+  { key: "egcg", name: "EGCG", unit: "mg", category: "bioactive", groupName: "Hoạt chất sinh học", subgroup: "Polyphenol", isCore: false, sortOrder: 142 },
+  { key: "quercetin", name: "Quercetin", unit: "mg", category: "bioactive", groupName: "Hoạt chất sinh học", subgroup: "Polyphenol", isCore: false, sortOrder: 143 },
+  { key: "anthocyanin", name: "Anthocyanin", unit: "mg", category: "bioactive", groupName: "Hoạt chất sinh học", subgroup: "Polyphenol", isCore: false, sortOrder: 144 },
+  { key: "beta_carotene", name: "Beta-carotene", unit: "mcg", category: "bioactive", groupName: "Hoạt chất sinh học", subgroup: "Carotenoid", isCore: false, sortOrder: 145 },
+  { key: "lycopene", name: "Lycopene", unit: "mcg", category: "bioactive", groupName: "Hoạt chất sinh học", subgroup: "Carotenoid", isCore: false, sortOrder: 146 },
+  { key: "lutein", name: "Lutein", unit: "mcg", category: "bioactive", groupName: "Hoạt chất sinh học", subgroup: "Carotenoid", isCore: false, sortOrder: 147 },
+  { key: "zeaxanthin", name: "Zeaxanthin", unit: "mcg", category: "bioactive", groupName: "Hoạt chất sinh học", subgroup: "Carotenoid", isCore: false, sortOrder: 148 },
+  { key: "astaxanthin", name: "Astaxanthin", unit: "mg", category: "bioactive", groupName: "Hoạt chất sinh học", subgroup: "Carotenoid", isCore: false, sortOrder: 149 },
+  { key: "ashwagandha", name: "Ashwagandha", unit: "mg", category: "bioactive", groupName: "Hoạt chất sinh học", subgroup: "Chiết xuất thảo dược", isCore: false, sortOrder: 150 },
+  { key: "ginseng", name: "Nhân sâm (ginseng)", unit: "mg", category: "bioactive", groupName: "Hoạt chất sinh học", subgroup: "Chiết xuất thảo dược", isCore: false, sortOrder: 151 },
+  { key: "ginkgo", name: "Bạch quả (ginkgo)", unit: "mg", category: "bioactive", groupName: "Hoạt chất sinh học", subgroup: "Chiết xuất thảo dược", isCore: false, sortOrder: 152 },
+  { key: "berberine", name: "Berberine", unit: "mg", category: "bioactive", groupName: "Hoạt chất sinh học", subgroup: "Chiết xuất thảo dược", isCore: false, sortOrder: 153 },
+  { key: "milk_thistle", name: "Kế sữa (milk thistle)", unit: "mg", category: "bioactive", groupName: "Hoạt chất sinh học", subgroup: "Chiết xuất thảo dược", isCore: false, sortOrder: 154 },
+];
+
+/**
+ * Probiotic strains are live microorganisms counted in CFU, not nutrients measured
+ * by mass. They live in their own table so a ten-billion CFU figure can never be
+ * swept into a nutrient total or a percent-of-daily-requirement calculation.
+ */
+export type ProbioticStrain = {
+  key: string;
+  name: string;
+  genus: string;
+  species: string;
+  sortOrder: number;
+};
+
+export type FoodProbioticAmount = ProbioticStrain & {
+  /** Colony-forming units in the item's reference serving. */
+  cfu: number;
+};
+
+export const PROBIOTIC_STRAINS: ProbioticStrain[] = [
+  { key: "l_acidophilus", name: "L. acidophilus", genus: "Lactobacillus", species: "acidophilus", sortOrder: 1 },
+  { key: "l_rhamnosus", name: "L. rhamnosus GG", genus: "Lactobacillus", species: "rhamnosus", sortOrder: 2 },
+  { key: "l_plantarum", name: "L. plantarum", genus: "Lactobacillus", species: "plantarum", sortOrder: 3 },
+  { key: "l_casei", name: "L. casei", genus: "Lactobacillus", species: "casei", sortOrder: 4 },
+  { key: "l_reuteri", name: "L. reuteri", genus: "Lactobacillus", species: "reuteri", sortOrder: 5 },
+  { key: "b_bifidum", name: "B. bifidum", genus: "Bifidobacterium", species: "bifidum", sortOrder: 6 },
+  { key: "b_longum", name: "B. longum", genus: "Bifidobacterium", species: "longum", sortOrder: 7 },
+  { key: "b_breve", name: "B. breve", genus: "Bifidobacterium", species: "breve", sortOrder: 8 },
+  { key: "b_lactis", name: "B. lactis", genus: "Bifidobacterium", species: "lactis", sortOrder: 9 },
+  { key: "s_boulardii", name: "S. boulardii", genus: "Saccharomyces", species: "boulardii", sortOrder: 10 },
+  { key: "bacillus_coagulans", name: "Bacillus coagulans", genus: "Bacillus", species: "coagulans", sortOrder: 11 },
+  { key: "bacillus_subtilis", name: "Bacillus subtilis", genus: "Bacillus", species: "subtilis", sortOrder: 12 },
 ];
 
 export const FOOD_LIBRARY_STORAGE_KEY = "magerlife_admin_food_library_v1";

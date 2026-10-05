@@ -1,5 +1,5 @@
 import type { AgentEvent } from "./agentEventService";
-import type { FoodLibraryItem, NutrientDefinition } from "./foodLibraryService";
+import type { FoodLibraryItem, NutrientDefinition, ProbioticStrain } from "./foodLibraryService";
 import type { MoneyCurrency } from "../models/finance";
 import type { NutritionMealLog } from "../models/nutrition";
 import type { UserProfile } from "../models/profile";
@@ -128,6 +128,7 @@ export type FoodLibraryResponse = {
 
 export type NutrientCatalogResponse = {
   nutrients: NutrientDefinition[];
+  probioticStrains: ProbioticStrain[];
   serverTime: string;
 };
 

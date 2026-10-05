@@ -67,9 +67,11 @@ import { resolveChatAgentTurn } from "./services/chatAgentService";
 import {
   loadAdminFoodLibrary,
   NUTRIENT_CATALOG,
+  PROBIOTIC_STRAINS,
   saveAdminFoodLibrary,
   type FoodLibraryItem,
   type NutrientDefinition,
+  type ProbioticStrain,
 } from "./services/foodLibraryService";
 import { buildMealBudgetPlan } from "./services/mealBudgetService";
 import {
@@ -5564,9 +5566,14 @@ function FoodAdminView({
   const [nutrientsExpanded, setNutrientsExpanded] = useState(false);
   // Only one group stays open at a time, so the full catalog never lands on screen together.
   const [openNutrientGroup, setOpenNutrientGroup] = useState<string | null>(null);
+  const [probioticsExpanded, setProbioticsExpanded] = useState(false);
   // The catalog comes from the database, so the form can only offer what the
   // nutrients table actually holds — a bundled list would drift out of sync.
   const [nutrientCatalog, setNutrientCatalog] = useState<NutrientDefinition[]>([]);
+  const [probioticStrains, setProbioticStrains] = useState<ProbioticStrain[]>([]);
+  // CFU counts keyed by strain, kept apart from extraNutrients because they're a
+  // live-culture count rather than a nutrient amount.
+  const [strainCfu, setStrainCfu] = useState<Record<string, string>>({});
   const [catalogState, setCatalogState] = useState<"loading" | "ready" | "offline">("loading");
   const [query, setQuery] = useState("");
   const [editingFoodId, setEditingFoodId] = useState<string | null>(null);
@@ -5580,18 +5587,28 @@ function FoodAdminView({
       if (cancelled) return;
       if (result.ok && result.data?.nutrients?.length) {
         setNutrientCatalog(result.data.nutrients);
+        setProbioticStrains(result.data.probioticStrains || []);
         setCatalogState("ready");
         return;
       }
       // Fall back to the bundled seed so an admin isn't blocked, but say so plainly
       // rather than passing stale data off as the live catalog.
       setNutrientCatalog(NUTRIENT_CATALOG);
+      setProbioticStrains(PROBIOTIC_STRAINS);
       setCatalogState("offline");
     });
     return () => {
       cancelled = true;
     };
   }, []);
+
+  const strainsByGenus = probioticStrains.reduce<{ genus: string; items: ProbioticStrain[] }[]>((acc, strain) => {
+    const bucket = acc.find((entry) => entry.genus === strain.genus);
+    if (bucket) bucket.items.push(strain);
+    else acc.push({ genus: strain.genus, items: [strain] });
+    return acc;
+  }, []);
+  const filledStrainCount = Object.values(strainCfu).filter((value) => Number(value) > 0).length;
 
   /** Splits a group into its subgroups, preserving catalog order and keeping
    *  unlabelled nutrients together in a leading block. */
@@ -5627,6 +5644,7 @@ function FoodAdminView({
   function resetFoodDraft() {
     setDraft({ name: "", aliases: "", servingGram: "100", servingUnit: "g", kcalPer100g: "", proteinPer100g: "", carbsPer100g: "", fatPer100g: "", fiberPer100g: "", tags: "" });
     setExtraNutrients({});
+    setStrainCfu({});
     setNutrientsExpanded(false);
     setOpenNutrientGroup(null);
     setEditingFoodId(null);
@@ -5678,6 +5696,11 @@ function FoodAdminView({
         if (!Number.isFinite(amount) || amount <= 0) return [];
         return [{ ...definition, amount }];
       }),
+      probiotics: probioticStrains.flatMap((strain) => {
+        const cfu = Number(strainCfu[strain.key]);
+        if (!Number.isFinite(cfu) || cfu <= 0) return [];
+        return [{ ...strain, cfu }];
+      }),
       tags: draft.tags
         .split(",")
         .map((item) => item.trim())
@@ -5714,6 +5737,11 @@ function FoodAdminView({
       storedAmounts[entry.key] = String(entry.amount);
     });
     setExtraNutrients(storedAmounts);
+    const storedCfu: Record<string, string> = {};
+    (food.probiotics || []).forEach((entry) => {
+      storedCfu[entry.key] = String(entry.cfu);
+    });
+    setStrainCfu(storedCfu);
     const hasStored = Object.keys(storedAmounts).length > 0;
     setNutrientsExpanded(hasStored);
     setOpenNutrientGroup(
@@ -5923,6 +5951,54 @@ function FoodAdminView({
               </div>
             )}
           </div>
+
+          {probioticStrains.length > 0 && (
+            <div className="space-y-2 rounded-xl border border-slate-200 bg-slate-50/60 p-3">
+              <button
+                type="button"
+                onClick={() => setProbioticsExpanded((prev) => !prev)}
+                className="flex w-full items-center justify-between gap-2 text-left"
+              >
+                <span>
+                  <span className="block text-[11px] font-black text-slate-700">Men vi sinh (probiotic)</span>
+                  <span className="block text-[10px] font-medium text-slate-400">
+                    Đếm theo CFU, tách riêng khỏi chất dinh dưỡng — chỉ điền với men vi sinh, sữa chua, thực phẩm lên men.
+                  </span>
+                </span>
+                <span className="flex shrink-0 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2 py-1 text-[10px] font-black text-slate-500">
+                  {filledStrainCount > 0 && <span className="text-emerald-600">{filledStrainCount}</span>}
+                  {probioticsExpanded ? "Thu gọn" : "Mở rộng"}
+                  <ChevronDown className={`h-3 w-3 transition-transform ${probioticsExpanded ? "rotate-180" : ""}`} />
+                </span>
+              </button>
+
+              {probioticsExpanded && (
+                <div className="space-y-2.5 border-t border-slate-200 pt-3">
+                  {strainsByGenus.map(({ genus, items }) => (
+                    <div key={genus} className="space-y-1.5">
+                      <p className="text-[9px] font-black uppercase italic tracking-wide text-slate-400">{genus}</p>
+                      <div className="grid grid-cols-2 gap-2">
+                        {items.map((strain) => (
+                          <label key={strain.key} className="block space-y-1">
+                            <span className="block text-[10px] font-bold italic leading-tight text-slate-500">
+                              {strain.name} <span className="not-italic font-medium text-slate-400">(CFU)</span>
+                            </span>
+                            <input
+                              value={strainCfu[strain.key] || ""}
+                              onChange={(event) => setStrainCfu((prev) => ({ ...prev, [strain.key]: event.target.value }))}
+                              inputMode="numeric"
+                              placeholder="VD: 1000000000"
+                              className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-xs font-semibold outline-none focus:border-emerald-400"
+                            />
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           <label className="block space-y-1">
             <span className="text-[11px] font-bold text-slate-500">Tag phân loại</span>

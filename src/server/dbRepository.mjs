@@ -89,7 +89,36 @@ const FALLBACK_NUTRIENT_CATALOG = [
   { key: "msm", name: "MSM", unit: "mg", category: "supplement", groupName: "Thực phẩm bổ sung", subgroup: "Khớp", isCore: false, sortOrder: 129 },
   { key: "coq10", name: "Coenzyme Q10", unit: "mg", category: "supplement", groupName: "Thực phẩm bổ sung", subgroup: "Sức khỏe chung", isCore: false, sortOrder: 130 },
   { key: "inositol", name: "Inositol", unit: "mg", category: "supplement", groupName: "Thực phẩm bổ sung", subgroup: "Sức khỏe chung", isCore: false, sortOrder: 131 },
-  { key: "probiotics", name: "Probiotic tổng", unit: "CFU", category: "supplement", groupName: "Thực phẩm bổ sung", subgroup: "Sức khỏe chung", isCore: false, sortOrder: 132 },
+  { key: "curcumin", name: "Curcumin", unit: "mg", category: "bioactive", groupName: "Hoạt chất sinh học", subgroup: "Polyphenol", isCore: false, sortOrder: 140 },
+  { key: "resveratrol", name: "Resveratrol", unit: "mg", category: "bioactive", groupName: "Hoạt chất sinh học", subgroup: "Polyphenol", isCore: false, sortOrder: 141 },
+  { key: "egcg", name: "EGCG", unit: "mg", category: "bioactive", groupName: "Hoạt chất sinh học", subgroup: "Polyphenol", isCore: false, sortOrder: 142 },
+  { key: "quercetin", name: "Quercetin", unit: "mg", category: "bioactive", groupName: "Hoạt chất sinh học", subgroup: "Polyphenol", isCore: false, sortOrder: 143 },
+  { key: "anthocyanin", name: "Anthocyanin", unit: "mg", category: "bioactive", groupName: "Hoạt chất sinh học", subgroup: "Polyphenol", isCore: false, sortOrder: 144 },
+  { key: "beta_carotene", name: "Beta-carotene", unit: "mcg", category: "bioactive", groupName: "Hoạt chất sinh học", subgroup: "Carotenoid", isCore: false, sortOrder: 145 },
+  { key: "lycopene", name: "Lycopene", unit: "mcg", category: "bioactive", groupName: "Hoạt chất sinh học", subgroup: "Carotenoid", isCore: false, sortOrder: 146 },
+  { key: "lutein", name: "Lutein", unit: "mcg", category: "bioactive", groupName: "Hoạt chất sinh học", subgroup: "Carotenoid", isCore: false, sortOrder: 147 },
+  { key: "zeaxanthin", name: "Zeaxanthin", unit: "mcg", category: "bioactive", groupName: "Hoạt chất sinh học", subgroup: "Carotenoid", isCore: false, sortOrder: 148 },
+  { key: "astaxanthin", name: "Astaxanthin", unit: "mg", category: "bioactive", groupName: "Hoạt chất sinh học", subgroup: "Carotenoid", isCore: false, sortOrder: 149 },
+  { key: "ashwagandha", name: "Ashwagandha", unit: "mg", category: "bioactive", groupName: "Hoạt chất sinh học", subgroup: "Chiết xuất thảo dược", isCore: false, sortOrder: 150 },
+  { key: "ginseng", name: "Nhân sâm (ginseng)", unit: "mg", category: "bioactive", groupName: "Hoạt chất sinh học", subgroup: "Chiết xuất thảo dược", isCore: false, sortOrder: 151 },
+  { key: "ginkgo", name: "Bạch quả (ginkgo)", unit: "mg", category: "bioactive", groupName: "Hoạt chất sinh học", subgroup: "Chiết xuất thảo dược", isCore: false, sortOrder: 152 },
+  { key: "berberine", name: "Berberine", unit: "mg", category: "bioactive", groupName: "Hoạt chất sinh học", subgroup: "Chiết xuất thảo dược", isCore: false, sortOrder: 153 },
+  { key: "milk_thistle", name: "Kế sữa (milk thistle)", unit: "mg", category: "bioactive", groupName: "Hoạt chất sinh học", subgroup: "Chiết xuất thảo dược", isCore: false, sortOrder: 154 },
+];
+
+const FALLBACK_PROBIOTIC_STRAINS = [
+  { key: "l_acidophilus", name: "L. acidophilus", genus: "Lactobacillus", species: "acidophilus", sortOrder: 1 },
+  { key: "l_rhamnosus", name: "L. rhamnosus GG", genus: "Lactobacillus", species: "rhamnosus", sortOrder: 2 },
+  { key: "l_plantarum", name: "L. plantarum", genus: "Lactobacillus", species: "plantarum", sortOrder: 3 },
+  { key: "l_casei", name: "L. casei", genus: "Lactobacillus", species: "casei", sortOrder: 4 },
+  { key: "l_reuteri", name: "L. reuteri", genus: "Lactobacillus", species: "reuteri", sortOrder: 5 },
+  { key: "b_bifidum", name: "B. bifidum", genus: "Bifidobacterium", species: "bifidum", sortOrder: 6 },
+  { key: "b_longum", name: "B. longum", genus: "Bifidobacterium", species: "longum", sortOrder: 7 },
+  { key: "b_breve", name: "B. breve", genus: "Bifidobacterium", species: "breve", sortOrder: 8 },
+  { key: "b_lactis", name: "B. lactis", genus: "Bifidobacterium", species: "lactis", sortOrder: 9 },
+  { key: "s_boulardii", name: "S. boulardii", genus: "Saccharomyces", species: "boulardii", sortOrder: 10 },
+  { key: "bacillus_coagulans", name: "Bacillus coagulans", genus: "Bacillus", species: "coagulans", sortOrder: 11 },
+  { key: "bacillus_subtilis", name: "Bacillus subtilis", genus: "Bacillus", species: "subtilis", sortOrder: 12 },
 ];
 
 function numberOrNull(value) {
@@ -372,7 +401,11 @@ function createMemoryRepository() {
       return { items, serverTime: new Date().toISOString() };
     },
     async getNutrientCatalog() {
-      return { nutrients: FALLBACK_NUTRIENT_CATALOG, serverTime: new Date().toISOString() };
+      return {
+        nutrients: FALLBACK_NUTRIENT_CATALOG,
+        probioticStrains: FALLBACK_PROBIOTIC_STRAINS,
+        serverTime: new Date().toISOString(),
+      };
     },
     async upsertFoodLibrary({ items = [], userId } = {}) {
       const normalizedEmail = normalizeEmail(userId);
@@ -689,6 +722,56 @@ async function createPostgresRepository() {
    * the catalog seed hasn't been applied — so it's reported back to the caller rather
    * than silently dropped or quietly invented.
    */
+  let strainIdMapCache = null;
+
+  async function getStrainIdMap() {
+    if (strainIdMapCache) return strainIdMapCache;
+    const result = await pool.query("select id, key from probiotic_strains");
+    strainIdMapCache = new Map(result.rows.map((row) => [row.key, row.id]));
+    return strainIdMapCache;
+  }
+
+  async function selectProbioticStrains() {
+    const result = await pool.query(
+      `
+      select key, name, genus, species, sort_order as "sortOrder"
+      from probiotic_strains
+      order by sort_order asc, name asc
+      `
+    );
+    return result.rows;
+  }
+
+  /** Mirrors replaceFoodItemNutrients, against the strain catalog instead. */
+  async function replaceFoodItemProbiotics(foodItemId, probiotics) {
+    if (!foodItemId || !Array.isArray(probiotics) || !probiotics.length) return [];
+    const idMap = await getStrainIdMap();
+    const unknownKeys = [];
+    for (const entry of probiotics) {
+      if (!entry?.key || entry.cfu === null || entry.cfu === undefined) continue;
+      const strainId = idMap.get(entry.key);
+      if (!strainId) {
+        unknownKeys.push(entry.key);
+        continue;
+      }
+      await pool.query(
+        `
+        insert into food_item_probiotics (food_item_id, strain_id, cfu)
+        values ($1,$2,$3)
+        on conflict (food_item_id, strain_id) do update set cfu = excluded.cfu
+        `,
+        [foodItemId, strainId, Number(entry.cfu) || 0]
+      );
+    }
+    if (unknownKeys.length) {
+      console.warn(
+        `Probiotic strains missing from the catalog, counts not stored: ${unknownKeys.join(", ")}. ` +
+          "Apply docs/database/seed-probiotics.sql to the database."
+      );
+    }
+    return unknownKeys;
+  }
+
   async function replaceFoodItemNutrients(foodItemId, nutrients) {
     if (!foodItemId || !Array.isArray(nutrients) || !nutrients.length) return [];
     const idMap = await getNutrientIdMap();
@@ -763,8 +846,11 @@ async function createPostgresRepository() {
           item.source === "admin",
         ]
       );
-      const unknown = await replaceFoodItemNutrients(upserted.rows[0]?.id, item.nutrients);
+      const foodItemId = upserted.rows[0]?.id;
+      const unknown = await replaceFoodItemNutrients(foodItemId, item.nutrients);
       unknown.forEach((key) => unknownNutrientKeys.add(key));
+      const unknownStrains = await replaceFoodItemProbiotics(foodItemId, item.probiotics);
+      unknownStrains.forEach((key) => unknownNutrientKeys.add(key));
     }
     return [...unknownNutrientKeys];
   }
@@ -810,6 +896,22 @@ async function createPostgresRepository() {
           join nutrients n on n.id = fin.nutrient_id
           where fin.food_item_id = f.id
         ), '[]'::json) as nutrients,
+        coalesce((
+          select json_agg(
+            json_build_object(
+              'key', s.key,
+              'name', s.name,
+              'genus', s.genus,
+              'species', s.species,
+              'sortOrder', s.sort_order,
+              'cfu', fip.cfu
+            )
+            order by s.sort_order asc
+          )
+          from food_item_probiotics fip
+          join probiotic_strains s on s.id = fip.strain_id
+          where fip.food_item_id = f.id
+        ), '[]'::json) as probiotics,
         f.tags,
         f.source,
         u.email as "ownerEmail",
@@ -831,6 +933,7 @@ async function createPostgresRepository() {
       fatPer100g: Number(item.fatPer100g || 0),
       fiberPer100g: Number(item.fiberPer100g || 0),
       nutrients: (item.nutrients || []).map((entry) => ({ ...entry, amount: Number(entry.amount || 0) })),
+      probiotics: (item.probiotics || []).map((entry) => ({ ...entry, cfu: Number(entry.cfu || 0) })),
       updatedAt: item.updatedAt instanceof Date ? item.updatedAt.toISOString() : item.updatedAt,
     }));
   }
@@ -1088,7 +1191,11 @@ async function createPostgresRepository() {
       return { items: await selectFoodLibrary(payload), serverTime: new Date().toISOString() };
     },
     async getNutrientCatalog() {
-      return { nutrients: await selectNutrientCatalog(), serverTime: new Date().toISOString() };
+      return {
+        nutrients: await selectNutrientCatalog(),
+        probioticStrains: await selectProbioticStrains(),
+        serverTime: new Date().toISOString(),
+      };
     },
     async upsertFoodLibrary({ items = [], userId } = {}) {
       const normalizedEmail = normalizeEmail(userId);

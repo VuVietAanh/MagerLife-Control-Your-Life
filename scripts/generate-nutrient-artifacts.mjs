@@ -16,6 +16,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 
 const SERVICE_PATH = "src/app/services/foodLibraryService.ts";
 const SQL_PATH = "docs/database/seed-nutrients.sql";
+const STRAIN_SQL_PATH = "docs/database/seed-probiotics.sql";
 const REPOSITORY_PATH = "src/server/dbRepository.mjs";
 
 function parseCatalog() {
@@ -97,11 +98,68 @@ function writeRepositoryFallback(rows) {
   writeFileSync(REPOSITORY_PATH, `${source.slice(0, start)}${startMarker}\n${entries}\n];${source.slice(end)}`, "utf8");
 }
 
+function parseStrains() {
+  const source = readFileSync(SERVICE_PATH, "utf8");
+  const start = source.indexOf("export const PROBIOTIC_STRAINS");
+  if (start === -1) throw new Error(`Could not locate PROBIOTIC_STRAINS in ${SERVICE_PATH}`);
+  const end = source.indexOf("];", start);
+
+  const pattern = /\{ key: "([^"]+)", name: "([^"]+)", genus: "([^"]+)", species: "([^"]+)", sortOrder: (\d+) \}/g;
+  const rows = [...source.slice(start, end).matchAll(pattern)].map(([, key, name, genus, species, sortOrder]) => ({
+    key,
+    name,
+    genus,
+    species,
+    sortOrder: Number(sortOrder),
+  }));
+  if (!rows.length) throw new Error("Parsed zero probiotic strains — has the list's formatting changed?");
+  return rows;
+}
+
+function writeStrainSeedSql(rows) {
+  const sqlString = (value) => `'${value.replace(/'/g, "''")}'`;
+  const keyArray = `array[${rows.map((row) => sqlString(row.key)).join(", ")}]`;
+  const values = rows
+    .map((row) => `  (${sqlString(row.key)}, ${sqlString(row.name)}, ${sqlString(row.genus)}, ${sqlString(row.species)}, ${row.sortOrder})`)
+    .join(",\n");
+
+  writeFileSync(
+    STRAIN_SQL_PATH,
+    `-- Probiotic strain seed for MagerLife — GENERATED FILE, DO NOT EDIT BY HAND.
+-- Regenerate with: node scripts/generate-nutrient-artifacts.mjs
+-- Source: PROBIOTIC_STRAINS in ${SERVICE_PATH}
+--
+-- Run migrate-nutrients-v4.sql first; it creates these tables.
+-- Strains are counted in CFU and kept apart from nutrients on purpose: a live
+-- culture count must never be summed into a nutrient intake total.
+
+insert into probiotic_strains (key, name, genus, species, sort_order) values
+${values}
+on conflict (key) do update set
+  name = excluded.name,
+  genus = excluded.genus,
+  species = excluded.species,
+  sort_order = excluded.sort_order;
+
+-- Dọn các chủng không còn trong danh sách.
+delete from food_item_probiotics where strain_id in (select id from probiotic_strains where key <> all(${keyArray}));
+delete from probiotic_strains where key <> all(${keyArray});
+
+-- Verify:
+select genus, count(*) from probiotic_strains group by genus order by min(sort_order);
+`,
+    "utf8"
+  );
+}
+
 const rows = parseCatalog();
+const strains = parseStrains();
 writeSeedSql(rows);
+writeStrainSeedSql(strains);
 writeRepositoryFallback(rows);
 
 const byGroup = rows.reduce((acc, row) => ({ ...acc, [row.groupName]: (acc[row.groupName] || 0) + 1 }), {});
 console.log(`Generated ${rows.length} nutrients from ${SERVICE_PATH}`);
 Object.entries(byGroup).forEach(([group, count]) => console.log(`  ${group}: ${count}`));
-console.log(`\nWrote ${SQL_PATH}\nWrote FALLBACK_NUTRIENT_CATALOG in ${REPOSITORY_PATH}`);
+console.log(`\nGenerated ${strains.length} probiotic strains`);
+console.log(`\nWrote ${SQL_PATH}\nWrote ${STRAIN_SQL_PATH}\nWrote FALLBACK_NUTRIENT_CATALOG in ${REPOSITORY_PATH}`);
