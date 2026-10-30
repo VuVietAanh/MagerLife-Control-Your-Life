@@ -15,3 +15,6 @@ Thumbs.db
 # Secrets / recovery codes - never commit
 recovery-codes.txt
 *recovery-codes*
+
+# Database exports land in the repo root; they hold real user data
+/*.csv
