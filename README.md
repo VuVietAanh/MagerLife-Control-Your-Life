@@ -11,6 +11,15 @@ MagerLife is a personal life dashboard with an AI chat assistant. It is built fo
 - My Brain: review, confirm and delete what the assistant remembers.
 - Account: profile data and AI provider settings (Mock, Ollama, Groq, OpenAI, xAI).
 
+## Code layout
+
+- `src/app/App.tsx`: app state, session restore and tab switching.
+- `src/app/views/<tab>/`: one folder per tab (`dashboard`, `finance`, `food`, `account`, `brain`) plus `auth`.
+- `src/app/layout/`: header, navigation tabs and the per-view error boundary.
+- `src/app/ui/`, `lib/`, `hooks/`, `data/`: shared primitives, pure helpers (formatting, lunar calendar, meal text parsing), hooks and starter data.
+- `src/app/services/`, `models/`: API client, domain logic and types.
+- `src/server/`: the Node API used locally and by `api/[...path].js` on Vercel.
+
 ## Run
 
 ```bash
