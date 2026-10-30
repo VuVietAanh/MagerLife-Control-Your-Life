@@ -20,12 +20,12 @@ Copy the Supabase Postgres connection string for `DATABASE_URL`.
 
 ## 2. Vercel project
 
-Import the GitHub repository into Vercel.
+Import the GitLab repository into Vercel.
 
 Use these settings:
 
 - Framework Preset: `Vite`
-- Build Command: `npm run build`
+- Build Command: `npm test && npm run build` (already set in `vercel.json`, so a failing test stops the deploy)
 - Output Directory: `dist`
 
 The API is deployed from `api/[...path].js`. The frontend should call the same Vercel domain with:
