@@ -5,6 +5,7 @@ import { after, before, describe, test } from "node:test";
 // so these keep the tests on the in-memory store and away from any real database or LLM key.
 process.env.MAGERLIFE_DB_DRIVER = "memory";
 process.env.MAGERLIFE_ADMIN_EMAILS = "owner@example.com";
+process.env.MAGERLIFE_ALLOWED_EMAILS = "friend@example.com,climber@example.com,guest@example.com";
 process.env.MAGERLIFE_SESSION_SECRET = "test-session-secret";
 process.env.MAGERLIFE_LLM_PROVIDER = "groq";
 process.env.MAGERLIFE_ENABLE_REAL_LLM = "true";
@@ -56,12 +57,38 @@ after(async () => {
   await new Promise((resolve) => server.close(resolve));
 });
 
+async function login(email) {
+  const { status, data } = await api("POST", "/auth/login", { body: { identifier: email, password: PASSWORD } });
+  assert.equal(status, 200);
+  return data;
+}
+
+async function canWriteSharedLibrary(email, token) {
+  const saved = await api("POST", "/food-library", {
+    token,
+    body: { userId: email, items: [foodItem(`probe-${email}`, "admin")] },
+  });
+  return saved.data.accepted === 1;
+}
+
+describe("registration", () => {
+  test("is closed to emails outside the allowlist", async () => {
+    const { status, data } = await api("POST", "/auth/register", {
+      body: { email: "stranger@example.com", password: PASSWORD, profile: {} },
+    });
+    assert.equal(status, 403);
+    assert.equal(data.error.code, "REGISTRATION_CLOSED");
+  });
+});
+
 describe("admin role", () => {
   test("only the configured email is admin", async () => {
     const ownerToken = await register("owner@example.com");
     const friendToken = await register("friend@example.com");
-    assert.equal((await api("GET", "/admin/analytics", { token: ownerToken })).status, 200);
-    assert.equal((await api("GET", "/admin/analytics", { token: friendToken })).status, 403);
+    assert.equal((await login("owner@example.com")).profile.role, "admin");
+    assert.equal((await login("friend@example.com")).profile.role, "user");
+    assert.equal(await canWriteSharedLibrary("owner@example.com", ownerToken), true);
+    assert.equal(await canWriteSharedLibrary("friend@example.com", friendToken), false);
   });
 
   test("a user cannot grant themselves admin through /persistence/sync", async () => {
@@ -72,9 +99,9 @@ describe("admin role", () => {
     });
     assert.equal(sync.status, 200);
 
-    const login = await api("POST", "/auth/login", { body: { identifier: "climber@example.com", password: PASSWORD } });
-    assert.equal(login.data.profile.role, "user");
-    assert.equal((await api("GET", "/admin/analytics", { token: login.data.token })).status, 403);
+    const session = await login("climber@example.com");
+    assert.equal(session.profile.role, "user");
+    assert.equal(await canWriteSharedLibrary("climber@example.com", session.token), false);
   });
 });
 

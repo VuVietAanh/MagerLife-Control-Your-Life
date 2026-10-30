@@ -3,8 +3,6 @@ import type { PendingNutritionApiRequest } from "../services/nutritionApiService
 import type { MoneyCurrency } from "./finance";
 import type { NutritionDietModeChanges, NutritionMealLog, NutritionTrackingMode } from "./nutrition";
 
-export type SubscriptionPlan = "free" | "pro";
-
 // "mock" = chỉ dùng rule engine local, không gọi model nào.
 // "ollama" = model chạy ngay trên máy người dùng (free, không cần key).
 // "groq" | "openai" | "xai" = provider trên mây, cần user tự đưa API key riêng.
@@ -25,10 +23,8 @@ export type UserProfile = {
   weight?: string;
   height?: string;
   job?: string;
-  interests?: string;
   salary?: number;
   currency?: MoneyCurrency;
-  subscriptionPlan?: SubscriptionPlan;
   role?: "user" | "admin";
   foodMonthlyBudget?: number;
   foodDailyBudget?: number;

@@ -12,7 +12,6 @@ export type ProfileMergeBase = {
   salary?: number;
   foodMonthlyBudget?: number;
   healthGoal?: "gain" | "maintain" | "lose";
-  subscriptionPlan?: "free" | "pro";
   role?: "user" | "admin";
   customChoiceInputs?: Record<string, string>;
   customChoiceSummary?: string;
@@ -133,7 +132,6 @@ export function buildNextUserProfile<TProfile extends ProfileMergeBase>(
   return {
     ...baseProfile,
     ...patch,
-    subscriptionPlan: patch.subscriptionPlan || baseProfile.subscriptionPlan || "free",
     role: patch.role || baseProfile.role || "user",
     customChoiceInputs: {
       ...(baseProfile.customChoiceInputs || {}),

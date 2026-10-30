@@ -370,7 +370,6 @@ export async function extractProfilePatchWithLocalAi({
         "lifestyle",
         "budgetStyle",
         "supportStyle",
-        "interests",
         "customChoiceSummary",
       ],
       rules: [

@@ -1,16 +1,15 @@
 # MagerLife
 
-MagerLife is an AI Life Agent System prototype rebuilt from the provided dashboard background.
+MagerLife is a personal life dashboard with an AI chat assistant. It is built for a single owner: sign-up is closed to everyone except the emails configured on the server.
 
-## Current MVP
+## Features
 
-- Multi-agent dashboard: Finance, Health, Planner, Memory.
-- User State Engine view: energy, stress, finance pressure, recovery.
-- Decision Engine daily brief with explainable recommendations.
-- Custom Jar Manager with user-defined jars, percentages, purpose notes, and linked goals.
-- Conversational Onboarding mock flow.
-- Privacy Hub / My Brain for confirm/delete memory items.
-- Token Routing view: Rule Engine, small router, and LLM API layer.
+- Dashboard: real-time clock and calendar (with lunar date), weather, daily planner, user state bar, calorie and meal tracking.
+- Chat assistant: conversation, meal logging from free text, and profile updates.
+- Jars: user-defined budget jars (by % or amount) and manual spending log, in VND or USD.
+- Food library: the admin curates the shared library; personal foods are private.
+- My Brain: review, confirm and delete what the assistant remembers.
+- Account: profile data and AI provider settings (Mock, Ollama, Groq, OpenAI, xAI).
 
 ## Run
 
@@ -25,4 +24,12 @@ npm run dev
 npm run build
 ```
 
-This project intentionally keeps dependencies minimal: React, Vite, Tailwind, and lucide-react.
+## Test
+
+```bash
+npm test
+```
+
+The tests run against the in-memory store and never call a real database or LLM. Vercel runs them before every build.
+
+This project intentionally keeps dependencies minimal: React, Vite, Tailwind, lucide-react, and pg.

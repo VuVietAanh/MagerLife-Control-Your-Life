@@ -1,9 +1,8 @@
 import http from "node:http";
 import { pathToFileURL } from "node:url";
-import { createPersistenceRepository, verifySessionToken } from "./dbRepository.mjs";
+import { createPersistenceRepository, isRegistrationAllowed, verifySessionToken } from "./dbRepository.mjs";
 import { loadEnvFile } from "./envLoader.mjs";
 import { answerChatWithLlm, extractProfilePatchWithLlm, hasConfiguredLlm, resolveFoodWithLlm } from "./llmProvider.mjs";
-import { createPaymentCheckout, getPaymentProviderStatus } from "./paymentProviders.mjs";
 
 loadEnvFile();
 const port = Number(process.env.MAGERLIFE_API_PORT || process.env.PORT || 8787);
@@ -158,44 +157,6 @@ function validateFinanceSnapshot(body = {}) {
   if (invalidJar) return "Hũ tiền thiếu id, tên hoặc percentage hợp lệ.";
   const invalidTx = snapshot.transactions.find((tx) => !tx?.id || !tx?.jarId || !["expense", "income"].includes(tx.type) || !Number.isFinite(Number(tx.amount)));
   return invalidTx ? "Giao dịch thiếu id, jarId, type hoặc amount hợp lệ." : "";
-}
-
-function validateBillingWebhook(body = {}) {
-  if (!isValidEmail(body.email)) return "Email không hợp lệ.";
-  if (!body.provider) return "Thiếu provider thanh toán.";
-  if (!body.status) return "Thiếu trạng thái subscription.";
-  return "";
-}
-
-function validateBillingCheckout(body = {}) {
-  if (!isValidEmail(body.userId)) return "userId không hợp lệ.";
-  if (!["payos", "momo", "vnpay"].includes(body.provider)) return "Provider phải là payos, momo hoặc vnpay.";
-  if (body.plan !== "pro") return "Hiện chỉ hỗ trợ gói pro.";
-  return "";
-}
-
-function requireBillingSecret(req, res) {
-  const expected = process.env.MAGERLIFE_BILLING_WEBHOOK_SECRET || "";
-  if (!expected) {
-    sendJson(req, res, 503, {
-      error: {
-        code: "BILLING_WEBHOOK_NOT_CONFIGURED",
-        message: "Billing webhook secret is not configured",
-      },
-    });
-    return false;
-  }
-  const provided = String(req.headers["x-magerlife-billing-secret"] || "");
-  if (provided !== expected) {
-    sendJson(req, res, 401, {
-      error: {
-        code: "INVALID_BILLING_WEBHOOK_SECRET",
-        message: "Invalid billing webhook secret",
-      },
-    });
-    return false;
-  }
-  return true;
 }
 
 function getBearerToken(req) {
@@ -368,6 +329,15 @@ export async function handleMagerLifeApiRequest(req, res) {
       sendValidationError(req, res, validationError);
       return;
     }
+    if (!isRegistrationAllowed(body.email)) {
+      sendJson(req, res, 403, {
+        error: {
+          code: "REGISTRATION_CLOSED",
+          message: "Đăng ký đang đóng. Email này không được phép tạo tài khoản.",
+        },
+      });
+      return;
+    }
     sendRepositoryResult(req, res, await persistenceRepository.registerAccount(body), 201);
     return;
   }
@@ -379,33 +349,6 @@ export async function handleMagerLifeApiRequest(req, res) {
       return;
     }
     sendRepositoryResult(req, res, await persistenceRepository.loginAccount(body));
-    return;
-  }
-
-  if (req.method === "POST" && url.pathname === "/billing/webhook") {
-    if (!requireBillingSecret(req, res)) return;
-    const validationError = validateBillingWebhook(body);
-    if (validationError) {
-      sendValidationError(req, res, validationError);
-      return;
-    }
-    sendRepositoryResult(req, res, await persistenceRepository.applyBillingWebhook(body));
-    return;
-  }
-
-  if (req.method === "GET" && url.pathname === "/billing/providers") {
-    sendJson(req, res, 200, { providers: getPaymentProviderStatus() });
-    return;
-  }
-
-  if (req.method === "POST" && url.pathname === "/billing/checkout") {
-    if (!requireSession(req, res, body?.userId || "")) return;
-    const validationError = validateBillingCheckout(body);
-    if (validationError) {
-      sendValidationError(req, res, validationError);
-      return;
-    }
-    sendRepositoryResult(req, res, await createPaymentCheckout(body));
     return;
   }
 
@@ -608,12 +551,6 @@ export async function handleMagerLifeApiRequest(req, res) {
   if (req.method === "POST" && url.pathname === "/persistence/sync") {
     if (!requireSession(req, res, body?.userId || body?.profile?.email || "")) return;
     sendJson(req, res, 200, await persistenceRepository.syncPersistence(body));
-    return;
-  }
-
-  if (req.method === "GET" && url.pathname === "/admin/analytics") {
-    if (!requireSession(req, res, body?.adminUserId || "", { adminOnly: true })) return;
-    sendJson(req, res, 200, await persistenceRepository.getAdminAnalytics());
     return;
   }
 

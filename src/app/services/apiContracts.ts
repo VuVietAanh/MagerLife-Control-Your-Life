@@ -3,7 +3,7 @@ import type { FoodLibraryItem, NutrientDefinition, ProbioticStrain } from "./foo
 import type { MoneyCurrency } from "../models/finance";
 import type { NutritionMealLog } from "../models/nutrition";
 import type { UserProfile } from "../models/profile";
-import type { AdminAnalyticsSnapshot, AgentTrainingRecord, UserAccountRecord, UserFinanceSnapshot } from "../models/storageSchema";
+import type { AgentTrainingRecord, UserFinanceSnapshot } from "../models/storageSchema";
 import type { WeatherData, WeatherPlace } from "./weatherService";
 
 export type ApiResult<TData> = {
@@ -222,62 +222,6 @@ export type PersistenceSyncResponse = {
   serverTime: string;
 };
 
-export type AdminAnalyticsRequest = {
-  adminUserId: string;
-};
-
-export type AdminAnalyticsResponse = {
-  analytics: AdminAnalyticsSnapshot;
-  users: UserAccountRecord[];
-  recentEvents: AgentEvent[];
-  trainingRecords: AgentTrainingRecord[];
-};
-
-export type BillingWebhookRequest = {
-  email: string;
-  provider: "stripe" | "payos" | "momo" | "vnpay" | "manual" | string;
-  status: "active" | "paid" | "trialing" | "canceled" | "expired" | "refunded" | string;
-  plan?: "free" | "pro";
-  amount?: number;
-  currency?: MoneyCurrency;
-  externalSubscriptionId?: string;
-  eventId?: string;
-};
-
-export type BillingWebhookResponse = {
-  accepted: boolean;
-  email: string;
-  subscriptionPlan: "free" | "pro";
-  provider: string;
-  serverTime: string;
-};
-
-export type BillingProviderName = "payos" | "momo" | "vnpay";
-
-export type BillingProvidersRequest = Record<string, never>;
-
-export type BillingProvidersResponse = {
-  providers: Record<BillingProviderName, {
-    configured: boolean;
-    requiredEnv: string[];
-  }>;
-};
-
-export type BillingCheckoutRequest = {
-  userId: string;
-  provider: BillingProviderName;
-  plan: "pro";
-  returnUrl?: string;
-  cancelUrl?: string;
-};
-
-export type BillingCheckoutResponse = {
-  provider: BillingProviderName;
-  checkoutUrl: string;
-  orderId: string;
-  amount: number;
-  raw?: unknown;
-};
 
 export type ApiHealthRequest = Record<string, never>;
 
@@ -382,21 +326,5 @@ export type ApiEndpointMap = {
   "POST /persistence/sync": {
     request: PersistenceSyncRequest;
     response: PersistenceSyncResponse;
-  };
-  "GET /admin/analytics": {
-    request: AdminAnalyticsRequest;
-    response: AdminAnalyticsResponse;
-  };
-  "POST /billing/webhook": {
-    request: BillingWebhookRequest;
-    response: BillingWebhookResponse;
-  };
-  "GET /billing/providers": {
-    request: BillingProvidersRequest;
-    response: BillingProvidersResponse;
-  };
-  "POST /billing/checkout": {
-    request: BillingCheckoutRequest;
-    response: BillingCheckoutResponse;
   };
 };

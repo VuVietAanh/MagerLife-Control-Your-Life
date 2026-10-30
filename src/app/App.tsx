@@ -1,7 +1,6 @@
 import {
   Activity,
   AlertCircle,
-  Battery,
   Bot,
   Brain,
   Calendar,
@@ -10,7 +9,6 @@ import {
   ChevronRight,
   Clock,
   CloudRain,
-  Crown,
   Database,
   DollarSign,
   Droplets,
@@ -20,12 +18,10 @@ import {
   Lock,
   LogOut,
   MapPin,
-  MessageSquare,
   Moon,
   Navigation,
   Pencil,
   Plus,
-  Route,
   Save,
   Send,
   Settings,
@@ -37,7 +33,7 @@ import {
   Utensils,
   Wallet,
   X,
-  Zap
+  Zap,
 } from "lucide-react";
 import React from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -46,7 +42,7 @@ import type { AuthDecorMode } from "./authDecorConfig";
 import type { Memory, Message } from "./models/agent";
 import type { Jar, MoneyCurrency, Transaction } from "./models/finance";
 import type { NutritionMealLog, NutritionMealName, NutritionTrackingMode } from "./models/nutrition";
-import type { AiProviderKey, AiSettings, SubscriptionPlan, UserProfile } from "./models/profile";
+import type { AiProviderKey, AiSettings, UserProfile } from "./models/profile";
 import { SeasonalDecor } from "./SeasonalDecor";
 import { appendAgentEvent, classifyProfileUpdateEvent, loadAgentEvents, type AgentEvent } from "./services/agentEventService";
 import { buildAgentDecisionLogs } from "./services/agentDecisionService";
@@ -59,10 +55,9 @@ import {
   sanitizeProfileForSync,
   testAiConnection,
 } from "./services/aiProviderService";
-import type { AdminAnalyticsResponse } from "./services/apiContracts";
 import { getAuthAccount, saveAuthAccount } from "./services/authAccountService";
 import { saveAuthSessionToken } from "./services/authSessionService";
-import { appendAgentTrainingRecord, buildAdminAnalyticsSnapshot, loadAgentTrainingRecords, loadUserAccountRecords } from "./services/dataRepository";
+import { appendAgentTrainingRecord } from "./services/dataRepository";
 import { resolveChatAgentTurn } from "./services/chatAgentService";
 import {
   loadAdminFoodLibrary,
@@ -87,15 +82,14 @@ import { resolveNutritionByApiContract, type NutritionApiResolution } from "./se
 import {
   buildNextUserProfile,
   extractSignalsFromFreeText,
-  parseProfilePatchFromText,
   profileSignalChips,
 } from "./services/profileService";
 import { buildAgentTrainingSamples, serializeTrainingSamplesAsJsonl } from "./services/trainingDatasetService";
 import { MAGERLIFE_API_BASE_URL } from "./services/apiConfig";
-import { getAdminAnalyticsFromApi, getApiDbHealth, getApiHealth, getFinanceSnapshotFromApi, getFoodLibraryFromApi, getNutrientCatalogFromApi, logNutritionMealToApi, loginAccountViaApi, registerAccountViaApi, saveFinanceSnapshotToApi, saveFoodLibraryToApi, saveProfileToApi, sendChatTurnToApi, syncAgentEventsToApi, syncPersistenceSnapshotToApi, updateProfileViaApi } from "./services/magerLifeApiFacade";
+import { getApiDbHealth, getApiHealth, getFinanceSnapshotFromApi, getFoodLibraryFromApi, getNutrientCatalogFromApi, logNutritionMealToApi, loginAccountViaApi, registerAccountViaApi, saveFinanceSnapshotToApi, saveFoodLibraryToApi, saveProfileToApi, sendChatTurnToApi, syncAgentEventsToApi, updateProfileViaApi } from "./services/magerLifeApiFacade";
 import { fetchWeatherForecast, resolveManualWeatherPlace, type WeatherPlace } from "./services/weatherService";
 
-type Tab = "dashboard" | "finance" | "onboarding" | "account" | "admin" | "brain" | "routing" | "food-admin";
+type Tab = "dashboard" | "finance" | "account" | "brain" | "food-admin";
 
 const foodServingUnits = FOOD_SERVING_UNITS;
 
@@ -103,12 +97,9 @@ function getNavigationTabs(profile: UserProfile | null): Array<{ id: Tab; label:
   return [
     { id: "dashboard", label: "Dashboard", icon: Gauge },
     { id: "finance", label: "Hũ", icon: Wallet },
-    { id: "onboarding", label: "Bổ sung dữ liệu", icon: MessageSquare },
     { id: "account", label: "Tài khoản", icon: Settings },
-    ...(profile?.role === "admin" ? [{ id: "admin" as Tab, label: "Admin", icon: Gauge }] : []),
     { id: "food-admin", label: "Kho món", icon: Database },
     { id: "brain", label: "My Brain", icon: Shield },
-    { id: "routing", label: "Routing", icon: Route },
   ];
 }
 
@@ -299,22 +290,11 @@ const initialTransactions: Transaction[] = [
   },
 ];
 
-const agents = [
-  { name: "Finance Agent", status: "watching", signal: "Sinh hoạt còn 70%", icon: Wallet },
-  { name: "Health Agent", status: "planning", signal: "Protein thấp hơn mục tiêu", icon: Heart },
-  { name: "Planner Agent", status: "ready", signal: "2 block tập trung còn trống", icon: Calendar },
-  { name: "Memory Agent", status: "review", signal: "3 memory cần xác nhận", icon: Database },
-];
-
 const quickQuestions = [
   "Hôm nay tôi có nên ăn phở không?",
   "Tối nay nên tập gì nếu ngủ 6 tiếng?",
   "Tôi có nên mua khóa học 1.2 triệu không?",
 ];
-
-function createStarterJars(monthlyIncome: number, foodMonthlyBudget = 0): Jar[] {
-  return createStarterJarsForCurrency(monthlyIncome, "VND", foodMonthlyBudget);
-}
 
 function isFixedFoodJar(jar: Pick<Jar, "id" | "name">) {
   const name = jar.name.toLowerCase();
@@ -420,16 +400,6 @@ function createMemoriesFromProfile(profile: UserProfile): Memory[] {
       lastVerified: "2026-06-02",
     });
   }
-  if (profile.interests) {
-    memories.push({
-      id: "profile-interests",
-      category: "preference",
-      content: `Nội dung quan tâm: ${profile.interests}. Tin cố định vẫn gồm thời tiết, luật đi đường, giá xăng dầu.`,
-      source: "user_input",
-      confidence: 0.78,
-      lastVerified: "2026-06-02",
-    });
-  }
   if (profile.lifestyle || profile.trainingHabit || profile.dietPreference) {
     memories.push({
       id: "profile-routines",
@@ -498,11 +468,6 @@ function safeText(value: unknown, fallback = "") {
   } catch {
     return fallback;
   }
-}
-
-function safeNumber(value: unknown, fallback = 0) {
-  const number = Number(String(value ?? "").replace(",", "."));
-  return Number.isFinite(number) ? number : fallback;
 }
 
 function formatCurrency(value: number, currency: MoneyCurrency = "VND") {
@@ -971,7 +936,6 @@ function AuthFlow({ onComplete }: { onComplete: (profile: UserProfile) => void }
     weight: "",
     height: "",
     job: "",
-    interests: "",
     salary: "",
     currency: "VND" as MoneyCurrency,
     foodMonthlyBudget: "",
@@ -1400,7 +1364,6 @@ function AuthFlow({ onComplete }: { onComplete: (profile: UserProfile) => void }
       weight: storedProfile.weight || "",
       height: storedProfile.height || "",
       job: storedProfile.job || "",
-      interests: storedProfile.interests || "",
       salary: storedProfile.salary ? storedProfile.salary.toLocaleString("vi-VN") : prev.salary,
       currency: storedProfile.currency || prev.currency,
       foodMonthlyBudget: storedProfile.foodMonthlyBudget || storedProfile.foodDailyBudget ? (storedProfile.foodMonthlyBudget || (storedProfile.foodDailyBudget || 0) * setupDaysInMonth).toLocaleString("vi-VN") : prev.foodMonthlyBudget,
@@ -1474,10 +1437,8 @@ function AuthFlow({ onComplete }: { onComplete: (profile: UserProfile) => void }
       gender: form.gender,
       weight: form.weight,
       height: form.height,
-      interests: form.interests,
       currency: form.currency,
       setupComplete: false,
-      subscriptionPlan: "free",
       role: "user",
     };
     const apiRegister = await registerAccountViaApi({
@@ -1490,6 +1451,10 @@ function AuthFlow({ onComplete }: { onComplete: (profile: UserProfile) => void }
       applyStoredProfile(apiRegister.data.profile);
       setError("");
       setStep("enrich");
+      return;
+    }
+    if (apiRegister.error?.code === "REGISTRATION_CLOSED") {
+      setError(apiRegister.error.message);
       return;
     }
     if (apiRegister.error?.code !== "NETWORK_ERROR") {
@@ -1529,7 +1494,6 @@ function AuthFlow({ onComplete }: { onComplete: (profile: UserProfile) => void }
       weight: form.weight,
       height: form.height,
       job: form.job,
-      interests: form.interests,
       salary: Number.isFinite(monthlyIncome) && monthlyIncome > 0 ? monthlyIncome : salary,
       currency: form.currency,
       foodMonthlyBudget: Number.isFinite(monthlyFoodBudget) && monthlyFoodBudget > 0 ? monthlyFoodBudget : undefined,
@@ -1589,7 +1553,6 @@ function AuthFlow({ onComplete }: { onComplete: (profile: UserProfile) => void }
       customChoiceInputs: customInputs,
       customChoiceSummary: customSummary,
       extractedSignals,
-      subscriptionPlan: "free",
       role: "user",
       setupComplete: true,
     };
@@ -1683,16 +1646,6 @@ function AuthFlow({ onComplete }: { onComplete: (profile: UserProfile) => void }
                       <span className="text-xs font-semibold text-slate-500">Chiều cao(cm) - (Không bắt buộc)</span>
                       <input type="number" value={form.height} onChange={(event) => patchForm("height", event.target.value)} placeholder="VD: 173" className="w-full rounded-full border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:border-emerald-400" />
                     </label>
-                    <label className="space-y-1.5 md:col-span-2">
-                      <span className="text-xs font-semibold text-slate-500">Nội dung quan tâm trên mạng xã hội (Không bắt buộc)</span>
-                      <textarea
-                        value={form.interests}
-                        onChange={(event) => patchForm("interests", event.target.value)}
-                        placeholder="AI, tài chính, gym, thời tiết, luật giao thông..."
-                        rows={3}
-                        className="min-h-[96px] w-full resize-none rounded-3xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:border-emerald-400"
-                      />
-                    </label>
                   </div>
                 )}
 
@@ -1720,7 +1673,6 @@ function AuthFlow({ onComplete }: { onComplete: (profile: UserProfile) => void }
                     ["Giới tính", form.gender],
                     ["Cân nặng", form.weight ? `${form.weight}kg` : "Sẽ hỏi sau"],
                     ["Chiều cao", form.height ? `${form.height}cm` : "Sẽ hỏi sau"],
-                    ["Nội dung quan tâm", form.interests || "Tự học theo tương tác"],
                   ].map(([key, value]) => (
                     <div key={key} className="rounded-lg border border-slate-200 bg-slate-50 p-3">
                       <p className="text-xs font-semibold text-slate-400">{key}</p>
@@ -2099,7 +2051,6 @@ function AuthFlow({ onComplete }: { onComplete: (profile: UserProfile) => void }
 }
 
 function Header({ tab, setTab, profile, onLogout }: { tab: Tab; setTab: (tab: Tab) => void; profile: UserProfile | null; onLogout: () => void }) {
-  const foodTabNeedsPro = profile?.role !== "admin" && profile?.subscriptionPlan !== "pro";
   const [apiHealth, setApiHealth] = useState<{
     status: "checking" | "online" | "offline";
     label: string;
@@ -2150,7 +2101,6 @@ function Header({ tab, setTab, profile, onLogout }: { tab: Tab; setTab: (tab: Ta
               >
                 <item.icon className="h-3.5 w-3.5" />
                 {displayLabel}
-                {item.id === "food-admin" && foodTabNeedsPro && <Crown className="h-3.5 w-3.5 text-amber-400" />}
               </button>
             );
           })}
@@ -2187,7 +2137,6 @@ function Header({ tab, setTab, profile, onLogout }: { tab: Tab; setTab: (tab: Ta
 
 function StateEngine({ insights }: { insights: ReturnType<typeof buildDashboardInsights> }) {
   const metrics = [
-    { label: "Life Score", value: insights.lifeScore, icon: Battery, tone: "bg-emerald-500", text: `${insights.lifeScore}%` },
     { label: "Health", value: insights.healthScore, icon: Activity, tone: "bg-blue-500", text: `${insights.healthScore}%` },
     { label: "Finance", value: insights.financeScore, icon: DollarSign, tone: "bg-violet-500", text: `${insights.financeScore}%` },
     { label: "Living jar used", value: insights.livingUsedRatio, icon: Moon, tone: "bg-amber-400", text: `${insights.livingUsedRatio}%` },
@@ -2223,149 +2172,8 @@ function StateEngine({ insights }: { insights: ReturnType<typeof buildDashboardI
       <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3 flex gap-2">
         <AlertCircle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
         <p className="text-xs leading-relaxed text-amber-800">
-          Ưu tiên hiện tại: {insights.priority}. Decision Engine đang cân bằng giữa ngân sách, kcal và hũ sinh hoạt.
+          Ưu tiên hiện tại: {insights.priority}.
         </p>
-      </div>
-    </Glass>
-  );
-}
-
-function AgentMesh() {
-  return (
-    <Glass className="p-4">
-      <Mono className="text-emerald-700">Agent Mesh</Mono>
-      <h2 className="text-base font-bold text-slate-900 mb-3">Coordination</h2>
-      <div className="space-y-2">
-        {agents.map((agent) => (
-          <div key={agent.name} className="flex items-center gap-3 rounded-lg border border-white/70 bg-white/55 p-3">
-            <div className="h-8 w-8 rounded-lg bg-slate-900 flex items-center justify-center">
-              <agent.icon className="h-4 w-4 text-white" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center justify-between gap-2">
-                <p className="text-xs font-bold text-slate-800 truncate">{agent.name}</p>
-                <Mono className="text-slate-400">{agent.status}</Mono>
-              </div>
-              <p className="text-xs text-slate-500 truncate">{agent.signal}</p>
-            </div>
-          </div>
-        ))}
-      </div>
-    </Glass>
-  );
-}
-
-
-function AgentDecisionPanel({ insights }: { insights: ReturnType<typeof buildDashboardInsights> }) {
-  return (
-    <Glass className="p-4">
-      <div className="mb-4 flex items-start justify-between gap-3">
-        <div>
-          <Mono className="text-emerald-700">Agent Decision Layer</Mono>
-          <h2 className="mt-1 text-base font-bold text-slate-900">Quyết định nội bộ</h2>
-          <p className="mt-1 text-xs leading-relaxed text-slate-500">Rule engine tự chấm điểm trước; API chỉ dùng để diễn giải khi cần.</p>
-        </div>
-        <Brain className="h-5 w-5 text-emerald-500" />
-      </div>
-      {insights.profileSignals.length > 0 && (
-        <div className="mb-4 rounded-xl border border-emerald-100 bg-emerald-50/70 p-3">
-          <div className="flex items-center justify-between gap-3">
-            <p className="text-xs font-black uppercase tracking-wide text-emerald-700">Profile signals</p>
-            <span className="text-[11px] font-black text-emerald-600">{insights.profileSignals.length}</span>
-          </div>
-          <div className="mt-2 flex flex-wrap gap-2">
-            {insights.profileSignals.map((signal) => (
-              <span key={signal.key} className="rounded-full border border-emerald-100 bg-white px-2.5 py-1 text-[11px] font-bold text-emerald-700">
-                {signal.label}
-              </span>
-            ))}
-          </div>
-        </div>
-      )}
-      <div className="space-y-3">
-        {insights.agentDecisions.map((decision) => {
-          const DecisionIcon = decision.icon;
-          return (
-            <div key={decision.agent} className="rounded-xl border border-white/80 bg-white/70 p-3">
-              <div className="flex items-start gap-3">
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-slate-900 text-white">
-                  <DecisionIcon className="h-4 w-4" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="text-sm font-black text-slate-900">{decision.agent}</p>
-                    <span className="rounded-full bg-emerald-50 px-2 py-1 text-[11px] font-black text-emerald-700">{decision.score}%</span>
-                  </div>
-                  <p className="mt-1 text-xs font-semibold leading-relaxed text-slate-700">{decision.decision}</p>
-                  <p className="mt-1 text-[11px] font-mono text-slate-400">{decision.route}</p>
-                  <div className="mt-2 flex flex-wrap gap-1.5">
-                    <span className={`rounded-full px-2 py-1 text-[10px] font-black ${decision.apiCalled ? "bg-rose-50 text-rose-600" : "bg-emerald-50 text-emerald-700"}`}>
-                      {decision.apiCalled ? "API/LLM called" : "Local rules"}
-                    </span>
-                    {decision.rulesFired.slice(0, 4).map((rule) => (
-                      <span key={rule} className="rounded-full border border-slate-100 bg-slate-50 px-2 py-1 text-[10px] font-bold text-slate-500">
-                        {rule}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              </div>
-              <div className="mt-3 space-y-2">
-                {decision.factors.map((factor) => (
-                  <div key={factor.label} className="space-y-1">
-                    <div className="flex items-center justify-between text-[11px] font-bold text-slate-500">
-                      <span>{factor.label}</span>
-                      <span>{factor.value}%</span>
-                    </div>
-                    <Progress value={factor.value} tone={factor.value > 75 ? "bg-emerald-500" : factor.value > 55 ? "bg-amber-400" : "bg-rose-400"} />
-                  </div>
-                ))}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </Glass>
-  );
-}
-
-function DailyBrief({ jars, insights }: { jars: Jar[]; insights: ReturnType<typeof buildDashboardInsights> }) {
-  const mainJar = jars.reduce((max, jar) => (jar.percentage > max.percentage ? jar : max), jars[0]);
-
-  return (
-    <Glass className="p-5">
-      <div className="flex items-start justify-between gap-4 mb-5">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <Zap className="h-4 w-4 text-emerald-600" />
-            <Mono className="text-emerald-700">Decision Engine</Mono>
-          </div>
-          <h1 className="text-2xl font-bold text-slate-900 leading-tight">Bản điều phối hôm nay</h1>
-          <p className="text-xs text-slate-500 mt-1">Ưu tiên: {insights.priority} · đọc từ hũ, kcal và Kế hoạch cá nhân</p>
-        </div>
-        <div className="text-right">
-          <div className="text-4xl font-bold text-slate-900">{insights.lifeScore}</div>
-          <Mono className="text-slate-400">Life Score</Mono>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
-        {insights.actions.map((action) => (
-          <div key={action.title} className={`rounded-lg border p-3 ${action.tone}`}>
-            <action.icon className="h-4 w-4 mb-2" />
-            <p className="text-sm font-bold text-slate-900">{action.title}</p>
-            <p className="text-xs mt-1 leading-relaxed">{action.text}</p>
-          </div>
-        ))}
-      </div>
-
-      <div className="rounded-lg border border-slate-200 bg-white/70 p-4">
-        <div className="flex items-start gap-3">
-          <Bot className="h-5 w-5 text-slate-700 shrink-0 mt-0.5" />
-          <p className="text-sm leading-relaxed text-slate-700">
-            Hệ thống đang hiểu bạn theo hướng: {insights.priority}. Hôm nay nên giữ chi tiêu trong vùng an toàn của hũ {mainJar?.name}, theo dõi kcal ở mức {insights.kcalAdvice}, và cập nhật chi tiêu ngay sau mỗi quyết định lớn.
-          </p>
-        </div>
       </div>
     </Glass>
   );
@@ -3240,7 +3048,6 @@ function NutritionDashboardCard({
   const [selectedMeal, setSelectedMeal] = useState<NutritionMealLog["meal"] | "Tất cả">("Tất cả");
   const [editingMealId, setEditingMealId] = useState<string | null>(null);
   const meals = profile?.nutritionMeals || [];
-  const isProPlan = profile?.subscriptionPlan === "pro";
   const customFoods = profile?.customFoodItems || [];
   const pendingNutritionRequests = profile?.pendingNutritionApiRequests?.filter((item) => item.status === "pending") || [];
   const pendingApiCount = pendingNutritionRequests.length;
@@ -3387,7 +3194,7 @@ function NutritionDashboardCard({
   }
 
   function addCustomFoodItem() {
-    if (!isProPlan || !foodDraft.name.trim()) return;
+    if (!foodDraft.name.trim()) return;
     const kcal = Number(foodDraft.kcalPer100g);
     if (!Number.isFinite(kcal) || kcal <= 0) return;
     const nextItem: FoodLibraryItem = {
@@ -3409,7 +3216,7 @@ function NutritionDashboardCard({
       ownerEmail: profile?.email,
       updatedAt: new Date().toISOString(),
     };
-    onProfileUpdate({ customFoodItems: [...customFoods, nextItem] }, `Pro custom food: ${nextItem.name}`);
+    onProfileUpdate({ customFoodItems: [...customFoods, nextItem] }, `Custom food: ${nextItem.name}`);
     setFoodDraft({ name: "", aliases: "", servingGram: "100", servingUnit: "g", kcalPer100g: "", proteinPer100g: "", carbsPer100g: "", fatPer100g: "", fiberPer100g: "" });
   }
 
@@ -3736,12 +3543,9 @@ function NutritionDashboardCard({
           <div>
             <h3 className="text-lg font-black">Kho món cá nhân</h3>
             <p className="mt-1 text-xs font-semibold leading-relaxed text-slate-500">
-              Pro có thể tự nhập món và thông số riêng. Khi chat đúng tên hoặc alias, hệ thống ưu tiên kho cá nhân trước kho Admin.
+              Tự nhập món và thông số riêng. Khi chat đúng tên hoặc alias, hệ thống ưu tiên kho cá nhân trước kho Admin.
             </p>
           </div>
-          <span className={`rounded-full px-3 py-1 text-xs font-black ${isProPlan ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>
-            {isProPlan ? "Pro" : "Free khóa"}
-          </span>
         </div>
 
         {pendingApiCount > 0 && (
@@ -3750,36 +3554,36 @@ function NutritionDashboardCard({
           </div>
         )}
 
-        <div className={`mt-4 grid gap-2 ${isProPlan ? "" : "opacity-50"}`}>
+        <div className="mt-4 grid gap-2">
           <div className="grid grid-cols-2 gap-2">
             <input
               value={foodDraft.name}
-              disabled={!isProPlan}
+             
               onChange={(event) => setFoodDraft((prev) => ({ ...prev, name: event.target.value }))}
               placeholder="Tên món"
               className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold outline-none focus:border-emerald-300 disabled:cursor-not-allowed"
             />
             <input
               value={foodDraft.aliases}
-              disabled={!isProPlan}
+             
               onChange={(event) => setFoodDraft((prev) => ({ ...prev, aliases: event.target.value }))}
               placeholder="Alias, cách gọi khác"
               className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold outline-none focus:border-emerald-300 disabled:cursor-not-allowed"
             />
           </div>
           <div className="grid grid-cols-3 gap-2">
-            <input value={foodDraft.servingGram} disabled={!isProPlan} onChange={(event) => setFoodDraft((prev) => ({ ...prev, servingGram: event.target.value }))} placeholder="Khẩu phần g" className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold outline-none focus:border-emerald-300 disabled:cursor-not-allowed" />
-            <input value={foodDraft.kcalPer100g} disabled={!isProPlan} onChange={(event) => setFoodDraft((prev) => ({ ...prev, kcalPer100g: event.target.value }))} placeholder="kcal/100g" className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold outline-none focus:border-emerald-300 disabled:cursor-not-allowed" />
-            <input value={foodDraft.proteinPer100g} disabled={!isProPlan} onChange={(event) => setFoodDraft((prev) => ({ ...prev, proteinPer100g: event.target.value }))} placeholder="đạm/100g" className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold outline-none focus:border-emerald-300 disabled:cursor-not-allowed" />
+            <input value={foodDraft.servingGram} onChange={(event) => setFoodDraft((prev) => ({ ...prev, servingGram: event.target.value }))} placeholder="Khẩu phần g" className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold outline-none focus:border-emerald-300 disabled:cursor-not-allowed" />
+            <input value={foodDraft.kcalPer100g} onChange={(event) => setFoodDraft((prev) => ({ ...prev, kcalPer100g: event.target.value }))} placeholder="kcal/100g" className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold outline-none focus:border-emerald-300 disabled:cursor-not-allowed" />
+            <input value={foodDraft.proteinPer100g} onChange={(event) => setFoodDraft((prev) => ({ ...prev, proteinPer100g: event.target.value }))} placeholder="đạm/100g" className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold outline-none focus:border-emerald-300 disabled:cursor-not-allowed" />
           </div>
           <div className="grid grid-cols-3 gap-2">
-            <input value={foodDraft.carbsPer100g} disabled={!isProPlan} onChange={(event) => setFoodDraft((prev) => ({ ...prev, carbsPer100g: event.target.value }))} placeholder="carb/100g" className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold outline-none focus:border-emerald-300 disabled:cursor-not-allowed" />
-            <input value={foodDraft.fatPer100g} disabled={!isProPlan} onChange={(event) => setFoodDraft((prev) => ({ ...prev, fatPer100g: event.target.value }))} placeholder="béo/100g" className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold outline-none focus:border-emerald-300 disabled:cursor-not-allowed" />
-            <input value={foodDraft.fiberPer100g} disabled={!isProPlan} onChange={(event) => setFoodDraft((prev) => ({ ...prev, fiberPer100g: event.target.value }))} placeholder="xơ/100g" className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold outline-none focus:border-emerald-300 disabled:cursor-not-allowed" />
+            <input value={foodDraft.carbsPer100g} onChange={(event) => setFoodDraft((prev) => ({ ...prev, carbsPer100g: event.target.value }))} placeholder="carb/100g" className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold outline-none focus:border-emerald-300 disabled:cursor-not-allowed" />
+            <input value={foodDraft.fatPer100g} onChange={(event) => setFoodDraft((prev) => ({ ...prev, fatPer100g: event.target.value }))} placeholder="béo/100g" className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold outline-none focus:border-emerald-300 disabled:cursor-not-allowed" />
+            <input value={foodDraft.fiberPer100g} onChange={(event) => setFoodDraft((prev) => ({ ...prev, fiberPer100g: event.target.value }))} placeholder="xơ/100g" className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold outline-none focus:border-emerald-300 disabled:cursor-not-allowed" />
           </div>
           <button
             type="button"
-            disabled={!isProPlan}
+           
             onClick={addCustomFoodItem}
             className="rounded-xl bg-slate-900 px-4 py-2 text-xs font-black text-white shadow-lg shadow-slate-200 transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-300"
           >
@@ -4859,255 +4663,6 @@ function FinanceView({
   );
 }
 
-function OnboardingView({
-  profile,
-  onProfileUpdate,
-  jars,
-  transactions,
-  currency,
-}: {
-  profile: UserProfile | null;
-  onProfileUpdate: (patch: Partial<UserProfile>, sourceText: string) => void;
-  jars: Jar[];
-  transactions: Transaction[];
-  currency: MoneyCurrency;
-}) {
-  const [profileInput, setProfileInput] = useState("");
-  const [lastUpdate, setLastUpdate] = useState<string[]>([]);
-  const insights = buildDashboardInsights(profile, jars, transactions, currency);
-  const age = profile?.birthday ? Math.max(0, new Date().getFullYear() - new Date(profile.birthday).getFullYear()) : 0;
-  const goalGroups = profile?.goalGroups;
-  const groupedGoals = goalGroups
-    ? [
-        goalGroups.nutrition ? `Dinh dưỡng: ${safeText(goalGroups.nutrition)}` : "",
-        goalGroups.bodyChange ? `Thay đổi cơ thể: ${safeText(goalGroups.bodyChange)}` : "",
-        goalGroups.training ? `Tập luyện: ${safeText(goalGroups.training)}` : "",
-        goalGroups.future ? `Tương lai: ${safeText(goalGroups.future)}` : "",
-      ].filter(Boolean).join("\n")
-    : "";
-  const goalSummary = groupedGoals || safeText(profile?.goalSummary, "Không có") || "Không có";
-  const goalText = goalSummary.toLowerCase();
-  const wantsFatLoss = goalText.includes("giảm mỡ") || goalText.includes("giảm cân");
-  const wantsMuscleGain = goalText.includes("tăng cơ");
-  const wantsWeightGain = goalText.includes("tăng mỡ") || goalText.includes("tăng nước") || goalText.includes("tăng cân");
-  const tdeeMatch = safeText(profile?.calorieNote).match(/TDEE duy trì ([\d.,]+)/);
-  const maintenanceKcal = tdeeMatch?.[1] ? `${tdeeMatch[1]} kcal/ngày` : "Chưa có dữ liệu";
-  const kcalDirection = safeText(profile?.kcalRecommendation) || (
-    wantsFatLoss
-      ? "Giảm nhẹ 100 - 300kcal/ngày so với TDEE"
-      : wantsWeightGain
-        ? "Tăng nhẹ 200 - 300kcal/ngày so với TDEE"
-        : "Ăn gần TDEE duy trì"
-  );
-  const systemSuggestion = safeText(profile?.systemSuggestion) || kcalDirection || "Không có";
-  const supportStyle = safeText(profile?.supportStyle, "Không có") || "Không có";
-  const goalCards = goalGroups
-    ? [
-        goalGroups.nutrition ? { label: "Dinh dưỡng", value: safeText(goalGroups.nutrition) } : null,
-        goalGroups.bodyChange ? { label: "Thay đổi cơ thể", value: safeText(goalGroups.bodyChange) } : null,
-        goalGroups.training ? { label: "Tập luyện", value: safeText(goalGroups.training) } : null,
-        goalGroups.future ? { label: "Tương lai", value: safeText(goalGroups.future) } : null,
-      ].filter(Boolean) as Array<{ label: string; value: string }>
-    : profile?.goalSummary
-      ? [{ label: "Đã chọn", value: safeText(profile.goalSummary) }]
-      : [];
-  const suggestionCards = [
-    wantsFatLoss ? { label: "Giảm mỡ", value: kcalDirection } : null,
-    wantsMuscleGain ? { label: "Tăng cơ", value: "Ưu tiên protein cao và luyện tập đều." } : null,
-    wantsWeightGain ? { label: "Tăng cân", value: kcalDirection } : null,
-    !wantsFatLoss && !wantsMuscleGain && !wantsWeightGain && systemSuggestion !== "Không có"
-      ? { label: "Khuyến nghị", value: systemSuggestion }
-      : null,
-  ].filter(Boolean) as Array<{ label: string; value: string }>;
-  const goalListItems = goalCards.flatMap((item) => splitListText(item.value));
-  const steps = [
-    { q: "Bạn muốn MagerLife ưu tiên điều gì nhất?", a: safeText(profile?.currentPriority, "Chưa chọn ưu tiên số 1.") || "Chưa chọn ưu tiên số 1." },
-    { q: "Thu nhập?", a: safeNumber(profile?.salary) > 0 ? `${formatCurrency(safeNumber(profile?.salary), profile?.currency || "VND")}/tháng` : "Chưa cập nhật lương." },
-    { q: "Chỉ số sức khỏe chính?", a: `${age ? `${age} tuổi - ` : ""}${safeText(profile?.weight, "?") || "?"}kg - ${safeText(profile?.height, "?") || "?"}cm.` },
-    { q: "Mục tiêu?", a: goalSummary, type: "goals" },
-    { q: "Kcal duy trì?", a: maintenanceKcal },
-    { q: "Hệ thống đề xuất?", a: systemSuggestion, type: "suggestions" },
-    { q: "Phong cách hỗ trợ mong muốn?", a: supportStyle },
-  ];
-  const extractedStates = [
-    {
-      label: "Thu nhập",
-      value: safeNumber(profile?.salary) > 0 ? formatCurrency(safeNumber(profile?.salary), profile?.currency || "VND") : "Chưa có",
-      confidence: "92%",
-      note: "Dùng để chia hũ, dự báo dòng tiền và giới hạn ngân sách ăn uống.",
-    },
-    {
-      label: "Mục tiêu sức khỏe",
-      value: goalSummary,
-      confidence: "86%",
-      note: `Kcal duy trì: ${maintenanceKcal}. Hệ thống đề xuất: ${systemSuggestion || kcalDirection}`,
-    },
-    {
-      label: "Mức tự động hóa",
-      value: "Gợi ý trước, người dùng xác nhận",
-      confidence: "78%",
-      note: "Free nên ưu tiên giải thích rõ lý do thay vì tự động thay đổi kế hoạch.",
-    },
-    {
-      label: "Nhạy cảm ngân sách ăn uống",
-      value: safeText(profile?.budgetStyle, "Chưa rõ") || "Chưa rõ",
-      confidence: "81%",
-      note: "Dùng để chọn món ăn, meal prep và cảnh báo khi ăn ngoài quá nhiều.",
-    },
-  ];
-
-  function submitProfileUpdate() {
-    const text = profileInput.trim();
-    if (!text) return;
-    const patch = parseProfilePatchFromText(text, profile);
-    const nextSignals = profileSignalChips(patch.extractedSignals);
-    const updates = [
-      patch.salary ? `Thu nhập: ${formatCurrency(patch.salary, profile?.currency || "VND")}/tháng` : "",
-      patch.foodMonthlyBudget ? `Ngân sách ăn uống: ${formatCurrency(patch.foodMonthlyBudget, profile?.currency || "VND")}/tháng` : "",
-      patch.weight ? `Cân nặng: ${patch.weight}kg` : "",
-      patch.height ? `Chiều cao: ${patch.height}cm` : "",
-      patch.healthGoal ? `Hướng sức khỏe: ${patch.healthGoal === "lose" ? "giảm cân/giảm mỡ" : patch.healthGoal === "gain" ? "tăng cân/tăng cơ" : "duy trì"}` : "",
-      nextSignals.length ? `Tín hiệu: ${nextSignals.map((item) => item.label).join(", ")}` : "",
-    ].filter(Boolean);
-    onProfileUpdate(patch, text);
-    setLastUpdate(updates.length ? updates : ["Đã lưu ghi chú vào hồ sơ để hệ thống dùng làm ngữ cảnh."]);
-    setProfileInput("");
-  }
-
-  function splitListText(value: string) {
-    return safeText(value)
-      .split(",")
-      .map((item) => item.trim())
-      .filter(Boolean);
-  }
-
-  function renderStepAnswer(step: { a: string; type?: string }) {
-    if (step.type === "goals") {
-      if (!goalListItems.length) return <p className="text-sm mt-1">Không có</p>;
-      return (
-        <ul className="mt-2 space-y-1.5">
-          {goalListItems.map((value) => (
-            <li key={value} className="flex gap-2 text-sm font-semibold leading-relaxed text-white">
-              <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-300" />
-              <span>{value}</span>
-            </li>
-          ))}
-        </ul>
-      );
-    }
-    if (step.type === "suggestions") {
-      if (!suggestionCards.length) return <p className="text-sm mt-1">Không có</p>;
-      return (
-        <div className="mt-2 space-y-2">
-          {suggestionCards.map((item) => (
-            <div key={item.label} className="rounded-lg border border-white/10 bg-white/7 px-3 py-2">
-              <p className="text-[11px] font-black uppercase tracking-wide text-cyan-200">{item.label}</p>
-              <ul className="mt-1 space-y-1">
-                {splitListText(item.value).map((value) => (
-                  <li key={value} className="flex gap-2 text-sm font-semibold leading-relaxed text-white">
-                    <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-cyan-300" />
-                    <span>{value}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
-        </div>
-      );
-    }
-    return <p className="whitespace-pre-line text-sm mt-1">{step.a}</p>;
-  }
-
-  return (
-    <main className="p-4 grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-4">
-      <Glass className="p-5">
-        <div className="flex items-center gap-2 mb-5">
-          <MessageSquare className="h-4 w-4 text-emerald-600" />
-          <div>
-          <Mono className="text-emerald-700">Bổ sung dữ liệu</Mono>
-          <h1 className="text-lg font-bold text-slate-900">Cập nhật hồ sơ qua hội thoại</h1>
-          </div>
-        </div>
-        <div className="mb-5 rounded-xl border border-emerald-100 bg-emerald-50/70 p-4">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <Mono className="text-emerald-700">Profile updater</Mono>
-              <h2 className="mt-1 text-sm font-black text-slate-900">Nhập thông tin mới để hệ thống cập nhật lại profile</h2>
-            </div>
-            <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-black text-emerald-700">Rule extraction</span>
-          </div>
-          <textarea
-            value={profileInput}
-            onChange={(event) => setProfileInput(event.target.value)}
-            rows={4}
-            placeholder="VD: Lương tháng này 12 triệu, tiền ăn 4 triệu, 52kg 163cm, muốn giảm mỡ nhưng đang đau gối và khá bận."
-            className="mt-3 w-full resize-none rounded-xl border border-emerald-100 bg-white px-3 py-3 text-sm font-medium text-slate-700 outline-none transition focus:border-emerald-300"
-          />
-          <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
-            <p className="text-xs leading-relaxed text-emerald-800">
-              Hệ thống sẽ trích xuất thu nhập, ngân sách ăn uống, chỉ số cơ thể, mục tiêu và tín hiệu cá nhân để đưa vào Agent context.
-            </p>
-            <button
-              onClick={submitProfileUpdate}
-              className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-bold text-white hover:bg-slate-800"
-            >
-              Cập nhật profile
-            </button>
-          </div>
-          {lastUpdate.length > 0 && (
-            <div className="mt-3 rounded-lg border border-white/80 bg-white/80 p-3">
-              <p className="text-xs font-black uppercase tracking-wide text-emerald-700">Vừa cập nhật</p>
-              <ul className="mt-2 space-y-1">
-                {lastUpdate.map((item) => (
-                  <li key={item} className="flex gap-2 text-xs font-semibold leading-relaxed text-slate-700">
-                    <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-500" />
-                    <span>{item}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </div>
-        <div className="space-y-3">
-          {steps.map((step, index) => (
-            <div key={step.q} className="grid grid-cols-1 md:grid-cols-[1fr_1fr] gap-3">
-              <div className="rounded-lg border border-white/80 bg-white/65 p-3">
-                <Mono className="text-slate-400">MagerLife · Q{index + 1}</Mono>
-                <p className="text-sm text-slate-700 mt-1">{step.q}</p>
-              </div>
-              <div className="rounded-lg bg-slate-900 p-3 text-white">
-                <Mono className="text-white/50">User</Mono>
-                {renderStepAnswer(step)}
-              </div>
-            </div>
-          ))}
-        </div>
-      </Glass>
-
-      <div className="space-y-4">
-      <Glass className="p-4">
-        <Mono className="text-emerald-700">Trạng thái đã hiểu</Mono>
-        <h2 className="text-base font-bold text-slate-900 mb-4">Dữ liệu có thể cập nhật vào hệ thống</h2>
-        <p className="mb-3 text-xs leading-relaxed text-slate-500">
-          Đây là những điều hệ thống suy ra từ đăng ký, thiết lập ban đầu và hội thoại. Chỉ số % là độ tin cậy tạm thời, sau này sẽ tăng/giảm theo tương tác.
-        </p>
-        {extractedStates.map((item) => (
-          <div key={item.label} className="py-3 border-b border-slate-100 last:border-0">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-slate-500">{item.label}</span>
-              <span className="text-xs font-mono text-slate-400">{item.confidence}</span>
-            </div>
-            <p className="text-sm font-bold text-slate-900 mt-1">{item.value}</p>
-            <p className="mt-1 text-xs leading-relaxed text-slate-500">{item.note}</p>
-          </div>
-        ))}
-      </Glass>
-      <AgentDecisionPanel insights={insights} />
-      </div>
-    </main>
-  );
-}
-
 function BrainView({
   memories,
   setMemories,
@@ -5285,256 +4840,6 @@ function BrainView({
           </Glass>
         ))}
       </div>
-    </main>
-  );
-}
-
-function RoutingView({ insights }: { insights: ReturnType<typeof buildDashboardInsights> }) {
-  const rows = [
-    { layer: "Rule Engine", load: "64%", cost: "0 token", examples: "validate hũ, tính kcal, cảnh báo budget", icon: Gauge },
-    { layer: "Small Router", load: "21%", cost: "rất thấp", examples: "intent, priority, cần LLM hay không", icon: Route },
-    { layer: "LLM API", load: "15%", cost: "có token", examples: "trade-off reasoning, explainability, planning", icon: Brain },
-  ];
-
-  return (
-    <main className="p-4 grid grid-cols-1 xl:grid-cols-[1fr_420px] gap-4">
-      <Glass className="p-5">
-        <div className="flex items-center gap-2 mb-5">
-          <Route className="h-4 w-4 text-emerald-600" />
-          <div>
-            <Mono className="text-emerald-700">RL vs API</Mono>
-            <h1 className="text-lg font-bold text-slate-900">Token routing policy</h1>
-          </div>
-        </div>
-        <div className="space-y-3">
-          {rows.map((row) => (
-            <div key={row.layer} className="rounded-lg border border-white/80 bg-white/65 p-4">
-              <div className="flex items-center gap-3 mb-3">
-                <div className="h-9 w-9 rounded-lg bg-slate-900 flex items-center justify-center">
-                  <row.icon className="h-4 w-4 text-white" />
-                </div>
-                <div className="flex-1">
-                  <div className="flex items-center justify-between">
-                    <h2 className="text-sm font-bold text-slate-900">{row.layer}</h2>
-                    <Mono className="text-slate-400">{row.cost}</Mono>
-                  </div>
-                  <p className="text-xs text-slate-500 mt-0.5">{row.examples}</p>
-                </div>
-              </div>
-              <Progress value={Number(row.load.replace("%", ""))} tone={row.layer === "LLM API" ? "bg-rose-400" : "bg-emerald-500"} />
-            </div>
-          ))}
-        </div>
-      </Glass>
-
-      <Glass className="p-4">
-        <Mono className="text-emerald-700">Cost Guard</Mono>
-        <h2 className="text-base font-bold text-slate-900 mb-4">Current target</h2>
-        <div className="text-5xl font-bold text-slate-900 mb-1">85%</div>
-        <p className="text-xs text-slate-500 mb-4">requests handled before LLM</p>
-        <div className="space-y-2">
-          {["Không train LLM từ đầu", "Fine-tune router nhỏ sau khi có data", "LLM chỉ dùng cho reasoning phức tạp"].map((item) => (
-            <div key={item} className="flex items-center gap-2 text-xs text-slate-700">
-              <Check className="h-3.5 w-3.5 text-emerald-600" />
-              {item}
-            </div>
-          ))}
-        </div>
-      </Glass>
-    </main>
-  );
-}
-
-function AdminOverviewView({
-  profile,
-  users,
-  foodLibrary,
-  agentEvents,
-  setTab,
-}: {
-  profile: UserProfile | null;
-  users: ReturnType<typeof loadUserAccountRecords>;
-  foodLibrary: FoodLibraryItem[];
-  agentEvents: AgentEvent[];
-  setTab: (tab: Tab) => void;
-}) {
-  const [syncStatus, setSyncStatus] = useState<"idle" | "syncing" | "done" | "error">("idle");
-  const [apiAdminSnapshot, setApiAdminSnapshot] = useState<AdminAnalyticsResponse | null>(null);
-
-  useEffect(() => {
-    if (profile?.role !== "admin" || !profile.email) {
-      setApiAdminSnapshot(null);
-      return;
-    }
-    let cancelled = false;
-    void getAdminAnalyticsFromApi({ adminUserId: profile.email }).then((result) => {
-      if (cancelled) return;
-      if (result.ok && result.data) setApiAdminSnapshot(result.data);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [profile?.email, profile?.role, syncStatus]);
-
-  if (profile?.role !== "admin") {
-    return (
-      <main className="p-4">
-        <Glass className="p-6">
-          <Mono className="text-rose-600">Admin only</Mono>
-          <h1 className="mt-1 text-xl font-black text-slate-900">Bạn cần tài khoản Admin</h1>
-          <p className="mt-2 text-sm text-slate-500">Trang này dùng để giám sát user, gói đăng ký, doanh thu, dữ liệu training và kho món hệ thống.</p>
-        </Glass>
-      </main>
-    );
-  }
-
-  const localAnalytics = buildAdminAnalyticsSnapshot({ users, foodLibrary, agentEvents });
-  const analytics = apiAdminSnapshot?.analytics || localAnalytics;
-  const trainingRecords = apiAdminSnapshot?.trainingRecords || loadAgentTrainingRecords();
-  const planRows = [
-    { label: "Gói miễn phí", key: "free" as const, price: 0, color: "bg-sky-400" },
-    { label: "Gói Pro", key: "pro" as const, price: 149_000, color: "bg-fuchsia-400" },
-  ];
-  const maxPlanCount = Math.max(1, ...planRows.map((row) => analytics.planCounts[row.key]));
-  const recentEvents = (apiAdminSnapshot?.recentEvents || agentEvents.slice(-6).reverse()).slice(0, 6);
-
-  async function syncPersistence() {
-    if (!profile || syncStatus === "syncing") return;
-    setSyncStatus("syncing");
-    const result = await syncPersistenceSnapshotToApi({
-      userId: profile.email || "local-admin",
-      profile,
-      nutritionLogs: profile.nutritionMeals || [],
-      agentEvents,
-      trainingRecords,
-      foodLibrary,
-    });
-    setSyncStatus(result.ok ? "done" : "error");
-  }
-
-  return (
-    <main className="space-y-4 p-4">
-      <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-        {[
-          ["Tổng user", analytics.totalUsers, "Tài khoản đã tạo", "from-sky-400 to-cyan-300", Database],
-          ["Đã đăng ký gói", analytics.paidUsers, "User Pro đang trả phí", "from-fuchsia-400 to-pink-300", Crown],
-          ["Đang hoạt động", analytics.activeUsers, "Ước tính active demo", "from-emerald-400 to-teal-300", Activity],
-          ["Tổng doanh thu", formatCurrency(analytics.revenue, "VND"), "MRR giả lập theo Pro", "from-orange-400 to-amber-300", DollarSign],
-        ].map(([label, value, note, tone, Icon]) => (
-          <Glass key={String(label)} className="relative overflow-hidden p-5">
-            <div className={`absolute inset-x-6 bottom-4 h-1 rounded-full bg-gradient-to-r ${tone as string}`} />
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="text-xs font-black uppercase text-slate-400">{String(label)}</p>
-                <p className="mt-2 text-2xl font-black text-slate-900">{String(value)}</p>
-                <p className="mt-1 text-xs font-semibold text-slate-500">{String(note)}</p>
-              </div>
-              <div className={`rounded-2xl bg-gradient-to-br ${tone as string} p-3 text-white shadow-lg shadow-slate-200`}>
-                <Icon className="h-5 w-5" />
-              </div>
-            </div>
-          </Glass>
-        ))}
-      </section>
-
-      <section className="grid grid-cols-1 gap-4 xl:grid-cols-[1fr_1fr]">
-        <Glass className="p-5">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <Mono className="text-sky-600">User analytics</Mono>
-              <h2 className="mt-1 text-lg font-black text-slate-900">Tỷ lệ user theo gói</h2>
-            </div>
-            <button onClick={() => setTab("account")} className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-700">
-              Tài khoản
-            </button>
-          </div>
-          <div className="mt-6 space-y-4">
-            {planRows.map((row) => {
-              const count = analytics.planCounts[row.key];
-              const width = Math.max(4, Math.round((count / maxPlanCount) * 100));
-              return (
-                <div key={row.key}>
-                  <div className="mb-1 flex items-center justify-between text-sm">
-                    <span className="font-black text-slate-700">{row.label}</span>
-                    <span className="font-black text-slate-900">{count} user</span>
-                  </div>
-                  <div className="h-3 rounded-full bg-slate-100">
-                    <div className={`h-3 rounded-full ${row.color}`} style={{ width: `${width}%` }} />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </Glass>
-
-        <Glass className="p-5">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <Mono className="text-emerald-600">Agent data pipeline</Mono>
-              <h2 className="mt-1 text-lg font-black text-slate-900">Dữ liệu để train lại Agent</h2>
-            </div>
-            <button onClick={() => setTab("brain")} className="rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2 text-xs font-black text-emerald-700">
-              Xem log
-            </button>
-            <button onClick={() => void syncPersistence()} className="rounded-xl bg-slate-900 px-3 py-2 text-xs font-black text-white disabled:opacity-50" disabled={syncStatus === "syncing"}>
-              {syncStatus === "syncing" ? "Đang sync..." : syncStatus === "done" ? "Đã sync" : syncStatus === "error" ? "Sync lỗi" : "Sync dữ liệu"}
-            </button>
-          </div>
-          <div className="mt-4 grid grid-cols-3 gap-3">
-            {[
-              ["Event", analytics.agentEventCount],
-              ["Pending món", analytics.pendingFoodRequests],
-              ["Kho món", analytics.foodLibraryCount],
-            ].map(([label, value]) => (
-              <div key={String(label)} className="rounded-2xl border border-white bg-white/70 p-3">
-                <p className="text-[11px] font-black uppercase text-slate-400">{String(label)}</p>
-                <p className="mt-1 text-xl font-black text-slate-900">{String(value)}</p>
-              </div>
-            ))}
-          </div>
-          <div className="mt-4 space-y-2">
-            {recentEvents.length ? recentEvents.map((event) => (
-              <div key={event.id} className="rounded-xl border border-slate-100 bg-white/70 px-3 py-2 text-xs">
-                <div className="flex items-center justify-between gap-3">
-                  <span className="font-black text-slate-800">{event.type}</span>
-                  <span className="text-slate-400">{new Date(event.createdAt).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })}</span>
-                </div>
-                <p className="mt-1 line-clamp-1 font-semibold text-slate-500">{event.source}</p>
-              </div>
-            )) : (
-              <p className="rounded-xl bg-white/60 px-3 py-4 text-sm font-semibold text-slate-500">Chưa có event. Khi user chat, cập nhật profile hoặc ghi món, dữ liệu sẽ xuất hiện ở đây.</p>
-            )}
-          </div>
-        </Glass>
-      </section>
-
-      <Glass className="p-5">
-        <div className="mb-4 flex items-center justify-between gap-3">
-          <div>
-            <Mono className="text-fuchsia-600">Revenue table</Mono>
-            <h2 className="mt-1 text-lg font-black text-slate-900">Doanh thu từng gói</h2>
-          </div>
-          <button onClick={() => setTab("food-admin")} className="rounded-xl bg-slate-900 px-4 py-2 text-xs font-black text-white">
-            Quản lý kho món
-          </button>
-        </div>
-        <div className="overflow-hidden rounded-2xl border border-slate-100">
-          <div className="grid grid-cols-4 bg-gradient-to-r from-amber-100 via-emerald-100 to-cyan-100 px-4 py-3 text-xs font-black uppercase text-slate-700">
-            <span>Gói</span>
-            <span>Lượt đăng ký</span>
-            <span>Giá lẻ</span>
-            <span>Doanh thu</span>
-          </div>
-          {planRows.map((row) => (
-            <div key={row.key} className="grid grid-cols-4 border-t border-slate-100 bg-white/70 px-4 py-3 text-sm font-bold text-slate-700">
-              <span>{row.label}</span>
-              <span>{analytics.planCounts[row.key]}</span>
-              <span>{formatCurrency(row.price, "VND")}</span>
-              <span className="text-orange-600">{formatCurrency(row.price * analytics.planCounts[row.key], "VND")}</span>
-            </div>
-          ))}
-        </div>
-      </Glass>
     </main>
   );
 }
@@ -6134,7 +5439,6 @@ function UserFoodLibraryView({
   profile: UserProfile | null;
   onProfileUpdate: (patch: Partial<UserProfile>, sourceText: string) => void;
 }) {
-  const isProPlan = profile?.subscriptionPlan === "pro";
   const customFoods = profile?.customFoodItems || [];
   const [draft, setDraft] = useState({
     name: "",
@@ -6174,7 +5478,7 @@ function UserFoodLibraryView({
 
   function saveCustomFood() {
     setCustomFoodError("");
-    if (!isProPlan || !draft.name.trim()) return;
+    if (!draft.name.trim()) return;
     const kcal = Number(draft.kcalPer100g);
     if (!Number.isFinite(kcal) || kcal <= 0) {
       setCustomFoodError("Cần nhập tên món và kcal/100g hợp lệ.");
@@ -6206,7 +5510,7 @@ function UserFoodLibraryView({
       updatedAt: new Date().toISOString(),
     };
     const nextFoods = editingCustomFoodId ? customFoods.map((food) => (food.id === editingCustomFoodId ? nextFood : food)) : [nextFood, ...customFoods];
-    onProfileUpdate({ customFoodItems: nextFoods }, `Pro custom food: ${nextFood.name}`);
+    onProfileUpdate({ customFoodItems: nextFoods }, `Custom food: ${nextFood.name}`);
     resetCustomFoodDraft();
   }
 
@@ -6231,46 +5535,17 @@ function UserFoodLibraryView({
     });
   }
 
-  if (!isProPlan) {
-    return (
-      <main className="p-4">
-        <Glass className="mx-auto max-w-3xl p-6">
-          <div className="flex items-start gap-4">
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-amber-100 text-amber-600 shadow-lg shadow-amber-100">
-              <Crown className="h-6 w-6" />
-            </div>
-            <div>
-              <Mono className="text-amber-600">Pro feature</Mono>
-              <h1 className="mt-1 text-2xl font-black text-slate-900">Kho món cá nhân</h1>
-              <p className="mt-2 text-sm font-semibold leading-relaxed text-slate-500">
-                Free vẫn dùng kho món chuẩn của hệ thống khi chat. Nâng cấp Pro để tự thêm món riêng, kcal và macro riêng; hệ thống sẽ ưu tiên dữ liệu cá nhân của bạn trước khi dùng kho Admin hoặc API.
-              </p>
-              <div className="mt-5 grid grid-cols-1 gap-3 md:grid-cols-3">
-                {["Tự nhập món hay ăn", "Tự chỉnh kcal/macro", "Ưu tiên khi chatbot match món"].map((item) => (
-                  <div key={item} className="rounded-2xl border border-amber-100 bg-amber-50/60 p-3 text-sm font-black text-amber-800">
-                    {item}
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </Glass>
-      </main>
-    );
-  }
-
   return (
     <main className="grid grid-cols-1 gap-4 p-4 xl:grid-cols-[380px_minmax(0,1fr)]">
       <Glass className="p-5">
         <div className="mb-5 flex items-start justify-between gap-3">
           <div>
-            <Mono className="text-emerald-700">Pro Food Library</Mono>
+            <Mono className="text-emerald-700">Food Library</Mono>
             <h1 className="mt-1 text-xl font-black text-slate-900">Kho món cá nhân</h1>
             <p className="mt-1 text-sm leading-relaxed text-slate-500">
               Chỉ thêm món riêng của bạn. Kho chuẩn Admin vẫn được hệ thống dùng ngầm và không hiển thị ở tài khoản người dùng.
             </p>
           </div>
-          <Crown className="h-5 w-5 text-amber-500" />
         </div>
         <div className="space-y-3">
           {editingCustomFoodId && (
@@ -6390,9 +5665,6 @@ function AccountView({
     salary: profile?.salary ? profile.salary.toLocaleString("vi-VN") : "",
     foodMonthlyBudget: profile?.foodMonthlyBudget ? profile.foodMonthlyBudget.toLocaleString("vi-VN") : "",
     currency: profile?.currency || "VND",
-    subscriptionPlan: profile?.subscriptionPlan || "free",
-    role: profile?.role || "user",
-    interests: profile?.interests || "",
     supportStyle: profile?.supportStyle || "",
   });
   const [savedText, setSavedText] = useState("");
@@ -6407,9 +5679,6 @@ function AccountView({
       salary: profile?.salary ? profile.salary.toLocaleString("vi-VN") : "",
       foodMonthlyBudget: profile?.foodMonthlyBudget ? profile.foodMonthlyBudget.toLocaleString("vi-VN") : "",
       currency: profile?.currency || "VND",
-      subscriptionPlan: profile?.subscriptionPlan || "free",
-      role: profile?.role || "user",
-      interests: profile?.interests || "",
       supportStyle: profile?.supportStyle || "",
     });
   }, [profile]);
@@ -6437,9 +5706,6 @@ function AccountView({
       weight: draft.weight.trim(),
       height: draft.height.trim(),
       currency: draft.currency as MoneyCurrency,
-      subscriptionPlan: draft.subscriptionPlan as SubscriptionPlan,
-      role: draft.role as "user" | "admin",
-      interests: draft.interests.trim(),
       supportStyle: draft.supportStyle.trim(),
     };
     if (salaryValue > 0) patch.salary = salaryValue;
@@ -6513,24 +5779,6 @@ function AccountView({
           <label className="space-y-1.5">
             <span className="text-xs font-bold text-slate-500">Phong cách hỗ trợ</span>
             <input value={draft.supportStyle} onChange={(event) => patchDraft("supportStyle", event.target.value)} placeholder="VD: Gợi ý rõ lý do, tôi tự xác nhận" className="w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm outline-none focus:border-emerald-400" />
-          </label>
-          <label className="space-y-1.5 rounded-2xl border border-violet-100 bg-violet-50/50 p-3">
-            <span className="text-xs font-bold text-violet-700">Gói sử dụng</span>
-            <select value={draft.subscriptionPlan} onChange={(event) => patchDraft("subscriptionPlan", event.target.value)} className="w-full rounded-xl border border-violet-200 bg-white px-3 py-3 text-sm font-bold outline-none focus:border-violet-400">
-              <option value="free">Free</option>
-              <option value="pro">Pro</option>
-            </select>
-          </label>
-          <label className="space-y-1.5 rounded-2xl border border-slate-200 bg-slate-50/70 p-3">
-            <span className="text-xs font-bold text-slate-600">Vai trò</span>
-            <select value={draft.role} onChange={(event) => patchDraft("role", event.target.value)} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm font-bold outline-none focus:border-slate-400">
-              <option value="user">User</option>
-              <option value="admin">Admin</option>
-            </select>
-          </label>
-          <label className="space-y-1.5 md:col-span-2">
-            <span className="text-xs font-bold text-slate-500">Nội dung quan tâm</span>
-            <textarea value={draft.interests} onChange={(event) => patchDraft("interests", event.target.value)} placeholder="AI, tài chính, gym, thời tiết, luật giao thông..." className="min-h-24 w-full rounded-2xl border border-slate-200 bg-white px-3 py-3 text-sm outline-none focus:border-emerald-400" />
           </label>
         </div>
 
@@ -6784,7 +6032,6 @@ function Dashboard({
         <StateEngine insights={insights} />
         <RealtimeCalendarCard calendar={calendar} />
         <WeatherForecastCard />
-        <AgentMesh />
       </div>
       <div className="space-y-4">
         <Glass className="p-4">
@@ -6811,7 +6058,6 @@ function Dashboard({
             ))}
           </div>
         </Glass>
-        <DailyBrief jars={jars} insights={insights} />
         <MealRecommendation insights={insights} currency={currency} profile={profile} onProfileUpdate={onProfileUpdate} />
         <Glass className="p-4">
           <div className="flex items-center justify-between mb-4">
@@ -6902,7 +6148,6 @@ export default function App() {
   const foodLibraryApiReadyRef = useRef(false);
   const financeApiReadyRef = useRef(false);
   const [agentEvents, setAgentEvents] = useState<AgentEvent[]>(() => loadAgentEvents());
-  const adminUsers = useMemo(() => loadUserAccountRecords(), [profile, isAuthenticated]);
 
   const background = useMemo(
     () => ({
@@ -6970,7 +6215,6 @@ export default function App() {
   function completeAuth(nextProfile: UserProfile) {
     const normalizedProfile: UserProfile = {
       ...nextProfile,
-      subscriptionPlan: nextProfile.subscriptionPlan || "free",
       role: nextProfile.role || "user",
     };
     const income = normalizedProfile.salary || salary;
@@ -7018,7 +6262,6 @@ export default function App() {
         setupComplete: normalizedProfile.setupComplete,
         hasKcalBase: Boolean(normalizedProfile.birthday && normalizedProfile.gender && normalizedProfile.weight && normalizedProfile.height),
         currency: normalizedProfile.currency || "VND",
-        subscriptionPlan: normalizedProfile.subscriptionPlan || "free",
       },
     });
   }
@@ -7211,12 +6454,9 @@ export default function App() {
         <ViewErrorBoundary key={tab} fallbackTitle={`Không mở được mục ${getNavigationTabs(profile).find((item) => item.id === tab)?.label || tab}`} onReset={() => setTab("dashboard")}>
           {tab === "dashboard" && <Dashboard jars={jars} transactions={transactions} profile={profile} currency={currency} adminFoodLibrary={adminFoodLibrary} onProfileUpdate={updateProfileFromConversation} />}
           {tab === "finance" && <FinanceView jars={jars} setJars={setJars} transactions={transactions} setTransactions={setTransactions} salary={monthlyIncome} currency={currency} savedJars={savedJars} setSavedJars={setSavedJars} setSavedTransactions={setSavedTransactions} />}
-          {tab === "onboarding" && <OnboardingView profile={profile} onProfileUpdate={updateProfileFromConversation} jars={jars} transactions={transactions} currency={currency} />}
           {tab === "account" && <AccountView profile={profile} onProfileUpdate={updateProfileFromConversation} />}
-          {tab === "admin" && <AdminOverviewView profile={profile} users={adminUsers} foodLibrary={adminFoodLibrary} agentEvents={agentEvents} setTab={setTab} />}
           {tab === "food-admin" && <FoodLibraryView profile={profile} onProfileUpdate={updateProfileFromConversation} foodLibrary={adminFoodLibrary} setFoodLibrary={setAdminFoodLibrary} />}
           {tab === "brain" && <BrainView memories={memories} setMemories={setMemories} agentEvents={agentEvents} />}
-          {tab === "routing" && <RoutingView insights={buildDashboardInsights(profile, jars, transactions, currency)} />}
         </ViewErrorBoundary>
           </>
         )}

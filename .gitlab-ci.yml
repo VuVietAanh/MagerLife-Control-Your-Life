@@ -18,4 +18,3 @@ build:
     - npm run check:deploy
     - node --check src/server/mockApiServer.mjs
     - node --check src/server/dbRepository.mjs
-    - node --check src/server/paymentProviders.mjs

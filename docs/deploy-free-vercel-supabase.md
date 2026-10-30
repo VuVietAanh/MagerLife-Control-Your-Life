@@ -45,7 +45,6 @@ DATABASE_URL=postgres://...
 DATABASE_SSL=true
 MAGERLIFE_SESSION_SECRET=replace-with-long-random-secret
 MAGERLIFE_ADMIN_EMAILS=your-admin-email@example.com
-MAGERLIFE_BILLING_WEBHOOK_SECRET=replace-with-your-webhook-secret
 MAGERLIFE_CORS_ORIGINS=https://your-vercel-domain.vercel.app
 MAGERLIFE_LLM_PROVIDER=mock
 MAGERLIFE_ENABLE_REAL_LLM=false
@@ -55,7 +54,7 @@ Only add `GROQ_API_KEY` later when you want real LLM calls in staging. Keep it s
 
 ## 4. First admin account
 
-Use an email listed in `MAGERLIFE_ADMIN_EMAILS`, then register normally in the app. The backend will assign admin role on registration/login.
+Use an email listed in `MAGERLIFE_ADMIN_EMAILS`, then register normally in the app. The backend will assign admin role on registration/login. Sign-up is closed to every other email unless it is listed in `MAGERLIFE_ALLOWED_EMAILS`.
 
 ## 5. Smoke test
 

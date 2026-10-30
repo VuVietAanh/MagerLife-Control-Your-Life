@@ -272,7 +272,6 @@ export async function extractProfilePatchWithLlm({ patch, sourceText, currentPro
         "lifestyle",
         "budgetStyle",
         "supportStyle",
-        "interests",
         "customChoiceSummary",
       ],
       rules: [

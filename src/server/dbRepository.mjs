@@ -164,6 +164,17 @@ function isBootstrapAdminEmail(email = "") {
   return bootstrapAdminEmails().has(normalizeEmail(email));
 }
 
+// The app is personal: only the admin may sign up, plus anyone listed in the
+// optional MAGERLIFE_ALLOWED_EMAILS.
+export function isRegistrationAllowed(email = "") {
+  const allowed = String(process.env.MAGERLIFE_ALLOWED_EMAILS || "")
+    .split(",")
+    .map((value) => normalizeEmail(value))
+    .filter(Boolean);
+  const normalizedEmail = normalizeEmail(email);
+  return isBootstrapAdminEmail(normalizedEmail) || allowed.includes(normalizedEmail);
+}
+
 // MAGERLIFE_ADMIN_EMAILS is the only source of the admin role. A role stored in the
 // database or sent by a client is never trusted, so it cannot be used to escalate.
 function serverRoleForEmail(email = "") {
@@ -173,12 +184,6 @@ function serverRoleForEmail(email = "") {
 function serverPlanForRole(role = "user", fallbackPlan = "free") {
   if (role === "admin") return "pro";
   return fallbackPlan === "pro" ? "pro" : "free";
-}
-
-function planFromBillingStatus(status = "", plan = "") {
-  if (plan === "pro") return "pro";
-  if (["active", "paid", "trialing"].includes(String(status).toLowerCase())) return "pro";
-  return "free";
 }
 
 function applyClientProfilePatch(current = {}, patch = {}) {
@@ -286,44 +291,6 @@ function buildTrainingRecordFromAgentEvent(event = {}) {
     accepted: event.type !== "nutrition_api_pending",
     trainSplit: "candidate",
     createdAt: event.createdAt || new Date().toISOString(),
-  };
-}
-
-function buildMemoryAnalytics(store) {
-  const users = [...store.profiles.entries()].map(([id, profile]) => ({
-    id,
-    email: profile.email || id,
-    profile,
-    role: profile.role || "user",
-    subscriptionPlan: profile.subscriptionPlan || "free",
-    createdAt: profile.createdAt || new Date().toISOString(),
-    updatedAt: profile.updatedAt || new Date().toISOString(),
-    lastActiveAt: profile.lastActiveAt || new Date().toISOString(),
-  }));
-  const planCounts = users.reduce(
-    (acc, user) => {
-      acc[user.subscriptionPlan || "free"] += 1;
-      return acc;
-    },
-    { free: 0, pro: 0 }
-  );
-  return {
-    analytics: {
-      totalUsers: users.length,
-      paidUsers: planCounts.pro,
-      activeUsers: Math.max(0, Math.round(users.length * 0.82)),
-      revenue: planCounts.pro * 149000,
-      planCounts,
-      foodLibraryCount: store.foodLibrary.length,
-      pendingFoodRequests: users.reduce(
-        (sum, user) => sum + ((user.profile?.pendingNutritionApiRequests || []).filter((request) => request.status === "pending").length),
-        store.agentEvents.filter((event) => event.type === "nutrition_api_pending").length
-      ),
-      agentEventCount: store.agentEvents.length,
-    },
-    users,
-    recentEvents: store.agentEvents.slice(-20).reverse(),
-    trainingRecords: store.trainingRecords.slice(-200),
   };
 }
 
@@ -446,29 +413,6 @@ function createMemoryRepository() {
         serverTime: new Date().toISOString(),
       };
     },
-    async applyBillingWebhook(payload = {}) {
-      const email = normalizeEmail(payload.email);
-      if (!email) return { error: { code: "VALIDATION_ERROR", message: "Email is required" } };
-      const current = store.profiles.get(email) || { email, birthday: "", gender: "", setupComplete: false };
-      const role = serverRoleForEmail(email);
-      const subscriptionPlan = serverPlanForRole(role, planFromBillingStatus(payload.status, payload.plan));
-      const nextProfile = sanitizeProfile({
-        ...current,
-        role,
-        subscriptionPlan,
-        billingProvider: payload.provider,
-        billingStatus: payload.status,
-        updatedAt: new Date().toISOString(),
-      });
-      store.profiles.set(email, nextProfile);
-      return {
-        accepted: true,
-        email,
-        subscriptionPlan,
-        provider: payload.provider || "unknown",
-        serverTime: new Date().toISOString(),
-      };
-    },
     async appendAgentEvents(userId = "local-demo-user", events = []) {
       const normalizedEmail = normalizeEmail(userId);
       const normalizedEvents = events.map((event) => ({ ...event, profileEmail: event.profileEmail || normalizedEmail }));
@@ -510,9 +454,6 @@ function createMemoryRepository() {
         },
         serverTime: new Date().toISOString(),
       };
-    },
-    async getAdminAnalytics() {
-      return buildMemoryAnalytics(store);
     },
   };
 }
@@ -1255,33 +1196,6 @@ async function createPostgresRepository() {
         serverTime: new Date().toISOString(),
       };
     },
-    async applyBillingWebhook(payload = {}) {
-      const email = normalizeEmail(payload.email);
-      if (!email) return { error: { code: "VALIDATION_ERROR", message: "Email is required" } };
-      const current = (await getProfileByEmail(email)) || sanitizeProfile({ email, birthday: "", gender: "", setupComplete: false });
-      const role = serverRoleForEmail(email);
-      const subscriptionPlan = serverPlanForRole(role, planFromBillingStatus(payload.status, payload.plan));
-      const userUuid = await ensureUser({ ...current, role, subscriptionPlan }, email);
-      await pool.query(
-        "update app_users set role = $1, subscription_plan = $2, updated_at = now(), last_active_at = now() where id = $3",
-        [role, subscriptionPlan, userUuid]
-      );
-      await upsertProfile(userUuid, {
-        ...current,
-        role,
-        subscriptionPlan,
-        billingProvider: payload.provider,
-        billingStatus: payload.status,
-        billingExternalSubscriptionId: payload.externalSubscriptionId,
-      });
-      return {
-        accepted: true,
-        email,
-        subscriptionPlan,
-        provider: payload.provider || "unknown",
-        serverTime: new Date().toISOString(),
-      };
-    },
     async appendAgentEvents(userId = "local-demo-user", events = []) {
       const userUuid = await ensureUser({}, userId);
       const normalizedEmail = normalizeEmail(userId);
@@ -1308,67 +1222,6 @@ async function createPostgresRepository() {
           foodLibrary: Array.isArray(body.foodLibrary) ? body.foodLibrary.length : 0,
         },
         serverTime: new Date().toISOString(),
-      };
-    },
-    async getAdminAnalytics() {
-      const usersResult = await pool.query(
-        `
-        select id, email, display_name, role, subscription_plan, created_at, updated_at, last_active_at
-        from app_users
-        order by created_at desc
-        limit 200
-        `
-      );
-      const countsResult = await pool.query(
-        `
-        select
-          count(*)::int as total_users,
-          count(*) filter (where subscription_plan = 'pro')::int as paid_users,
-          count(*) filter (where last_active_at > now() - interval '30 days')::int as active_users
-        from app_users
-        `
-      );
-      const foodResult = await pool.query("select count(*)::int as count from food_library_items");
-      const eventResult = await pool.query("select count(*)::int as count from agent_events");
-      const pendingResult = await pool.query("select count(*)::int as count from pending_nutrition_api_requests where status = 'pending'");
-      const recentEvents = await pool.query(
-        "select external_id as id, event_type as type, source, payload, created_at as \"createdAt\" from agent_events order by created_at desc limit 20"
-      );
-      const training = await pool.query(
-        "select external_id as id, input, output, label, accepted, train_split as \"trainSplit\", created_at as \"createdAt\" from agent_training_records order by created_at desc limit 200"
-      );
-      const row = countsResult.rows[0] || {};
-      const users = usersResult.rows.map((user) => ({
-        id: user.id,
-        email: user.email,
-        profile: { email: user.email, name: user.display_name, role: user.role, subscriptionPlan: user.subscription_plan },
-        role: user.role,
-        subscriptionPlan: user.subscription_plan,
-        createdAt: user.created_at,
-        updatedAt: user.updated_at,
-        lastActiveAt: user.last_active_at,
-      }));
-      const planCounts = users.reduce(
-        (acc, user) => {
-          acc[user.subscriptionPlan || "free"] += 1;
-          return acc;
-        },
-        { free: 0, pro: 0 }
-      );
-      return {
-        analytics: {
-          totalUsers: row.total_users || 0,
-          paidUsers: row.paid_users || 0,
-          activeUsers: row.active_users || 0,
-          revenue: (row.paid_users || 0) * 149000,
-          planCounts,
-          foodLibraryCount: foodResult.rows[0]?.count || 0,
-          pendingFoodRequests: pendingResult.rows[0]?.count || 0,
-          agentEventCount: eventResult.rows[0]?.count || 0,
-        },
-        users,
-        recentEvents: recentEvents.rows,
-        trainingRecords: training.rows,
       };
     },
   };
