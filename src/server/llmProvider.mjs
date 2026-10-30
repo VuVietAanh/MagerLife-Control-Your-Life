@@ -25,8 +25,14 @@ function getOpenAiConfig() {
 // aiOverride: { provider, apiKey, model, baseUrl } gửi kèm theo từng request khi user tự
 // cấu hình provider/API key riêng ở Settings > Trợ lý AI (xem apiContracts.ts: AiOverride).
 // Có override thì dùng override, không thì rơi về config mặc định trong .env của server.
+// Override chỉ có hiệu lực khi user gửi kèm key của chính họ. Không bao giờ ghép key trong .env
+// của server với baseUrl do client gửi lên, nếu không key của server sẽ bị gửi tới URL bất kỳ.
+function usableOverride(aiOverride) {
+  return aiOverride?.provider && aiOverride?.apiKey ? aiOverride : null;
+}
+
 export function hasConfiguredLlm(aiOverride) {
-  if (aiOverride?.provider && aiOverride?.apiKey) return true;
+  if (usableOverride(aiOverride)) return true;
   if (process.env.MAGERLIFE_ENABLE_REAL_LLM === "false") return false;
   const provider = process.env.MAGERLIFE_LLM_PROVIDER || "groq";
   if (provider === "mock") return false;
@@ -36,18 +42,19 @@ export function hasConfiguredLlm(aiOverride) {
   return false;
 }
 
-function resolveProviderConfig(aiOverride) {
-  if (aiOverride?.provider === "groq") {
+export function resolveProviderConfig(aiOverride) {
+  const override = usableOverride(aiOverride);
+  if (override?.provider === "groq") {
     const base = getGroqConfig();
-    return { provider: "groq", apiKey: aiOverride.apiKey || base.apiKey, baseUrl: aiOverride.baseUrl || base.baseUrl, model: aiOverride.model || base.model };
+    return { provider: "groq", apiKey: override.apiKey, baseUrl: override.baseUrl || base.baseUrl, model: override.model || base.model };
   }
-  if (aiOverride?.provider === "xai") {
+  if (override?.provider === "xai") {
     const base = getXaiConfig();
-    return { provider: "xai", apiKey: aiOverride.apiKey || base.apiKey, baseUrl: aiOverride.baseUrl || base.baseUrl, model: aiOverride.model || base.model };
+    return { provider: "xai", apiKey: override.apiKey, baseUrl: override.baseUrl || base.baseUrl, model: override.model || base.model };
   }
-  if (aiOverride?.provider === "openai") {
+  if (override?.provider === "openai") {
     const base = getOpenAiConfig();
-    return { provider: "openai", apiKey: aiOverride.apiKey || base.apiKey, baseUrl: aiOverride.baseUrl || base.baseUrl, model: aiOverride.model || base.model };
+    return { provider: "openai", apiKey: override.apiKey, baseUrl: override.baseUrl || base.baseUrl, model: override.model || base.model };
   }
   const provider = process.env.MAGERLIFE_LLM_PROVIDER || "groq";
   if (provider === "groq") return { provider: "groq", ...getGroqConfig() };

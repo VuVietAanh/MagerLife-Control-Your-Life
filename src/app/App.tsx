@@ -6914,7 +6914,7 @@ export default function App() {
 
   useEffect(() => {
     saveAdminFoodLibrary(adminFoodLibrary);
-    if (!foodLibraryApiReadyRef.current) return;
+    if (!foodLibraryApiReadyRef.current || profile?.role !== "admin") return;
     void saveFoodLibraryToApi({
       userId: profile?.email || "local-admin",
       items: adminFoodLibrary,
@@ -6930,6 +6930,7 @@ export default function App() {
         setAdminFoodLibrary(result.data.items);
         return;
       }
+      if (profile?.role !== "admin") return;
       void saveFoodLibraryToApi({
         userId: profile?.email || "local-admin",
         items: adminFoodLibrary,

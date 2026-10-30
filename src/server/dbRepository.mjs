@@ -141,12 +141,12 @@ function normalizeEmail(value = "") {
 }
 
 function sanitizeProfile(profile = {}) {
-  const safeRole = profile.role === "admin" ? "admin" : "user";
+  const email = normalizeEmail(profile.email);
   const safePlan = profile.subscriptionPlan === "pro" ? "pro" : "free";
   return {
     ...profile,
-    email: normalizeEmail(profile.email),
-    role: safeRole,
+    email,
+    role: serverRoleForEmail(email),
     subscriptionPlan: safePlan,
   };
 }
@@ -164,8 +164,10 @@ function isBootstrapAdminEmail(email = "") {
   return bootstrapAdminEmails().has(normalizeEmail(email));
 }
 
-function serverRoleForEmail(email = "", fallbackRole = "user") {
-  return isBootstrapAdminEmail(email) ? "admin" : fallbackRole === "admin" ? "admin" : "user";
+// MAGERLIFE_ADMIN_EMAILS is the only source of the admin role. A role stored in the
+// database or sent by a client is never trusted, so it cannot be used to escalate.
+function serverRoleForEmail(email = "") {
+  return isBootstrapAdminEmail(email) ? "admin" : "user";
 }
 
 function serverPlanForRole(role = "user", fallbackPlan = "free") {
@@ -210,10 +212,9 @@ function signSessionPayload(payload) {
   return createHmac("sha256", sessionSecret()).update(payload).digest("base64url");
 }
 
-function createSessionToken(email, role = "user") {
+function createSessionToken(email) {
   const payload = Buffer.from(JSON.stringify({
     sub: normalizeEmail(email),
-    role: role === "admin" ? "admin" : "user",
     iat: Math.floor(Date.now() / 1000),
     exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 7,
   })).toString("base64url");
@@ -230,9 +231,11 @@ export function verifySessionToken(token = "") {
   try {
     const session = JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
     if (!session.sub || Number(session.exp || 0) < Math.floor(Date.now() / 1000)) return null;
+    // Resolved on every request, so removing an email from MAGERLIFE_ADMIN_EMAILS
+    // revokes admin access without waiting for issued tokens to expire.
     return {
       sub: normalizeEmail(session.sub),
-      role: session.role === "admin" ? "admin" : "user",
+      role: serverRoleForEmail(session.sub),
     };
   } catch {
     return null;
@@ -245,6 +248,17 @@ function normalizeFoodItems(items = []) {
     source: item.source === "user" ? "user" : "admin",
     updatedAt: item.updatedAt || new Date().toISOString(),
   }));
+}
+
+// Only the admin curates the shared library. Anyone else can save items into their own
+// private list, and can only overwrite an existing item they own.
+function scopeFoodItemsToEditor(items, editorEmail, isAdmin) {
+  if (isAdmin) return items.map((item) => item.source === "user" ? { ...item, ownerEmail: item.ownerEmail || editorEmail } : item);
+  return items.filter((item) => item.source === "user").map((item) => ({ ...item, ownerEmail: editorEmail }));
+}
+
+function canEditFoodItem(existing, editorEmail, isAdmin) {
+  return isAdmin || !existing || (existing.source === "user" && existing.ownerEmail === editorEmail);
 }
 
 function normalizeFinanceSnapshot({ userId, financeSnapshot } = {}) {
@@ -347,7 +361,7 @@ function createMemoryRepository() {
       });
       store.authAccounts.set(normalizedEmail, { passwordHash: hash, passwordSalt: salt });
       store.profiles.set(normalizedEmail, { ...nextProfile, updatedAt: new Date().toISOString() });
-      return { userId: normalizedEmail, profile: nextProfile, token: createSessionToken(normalizedEmail, nextProfile.role) };
+      return { userId: normalizedEmail, profile: nextProfile, token: createSessionToken(normalizedEmail) };
     },
     async loginAccount({ identifier, password } = {}) {
       const normalizedEmail = normalizeEmail(identifier);
@@ -362,7 +376,7 @@ function createMemoryRepository() {
         store.profiles.set(normalizedEmail, { ...profile, updatedAt: new Date().toISOString() });
       }
       store.profiles.set(normalizedEmail, { ...profile, lastActiveAt: new Date().toISOString() });
-      return { userId: normalizedEmail, profile, token: createSessionToken(normalizedEmail, profile.role) };
+      return { userId: normalizedEmail, profile, token: createSessionToken(normalizedEmail) };
     },
     async getProfile(userId) {
       const normalizedEmail = normalizeEmail(userId);
@@ -407,13 +421,14 @@ function createMemoryRepository() {
         serverTime: new Date().toISOString(),
       };
     },
-    async upsertFoodLibrary({ items = [], userId } = {}) {
+    async upsertFoodLibrary({ items = [], userId, isAdmin = false } = {}) {
       const normalizedEmail = normalizeEmail(userId);
-      const incoming = normalizeFoodItems(items).map((item) => item.source === "user" ? { ...item, ownerEmail: item.ownerEmail || normalizedEmail } : item);
       const byId = new Map(store.foodLibrary.map((item) => [item.id, item]));
+      const incoming = scopeFoodItemsToEditor(normalizeFoodItems(items), normalizedEmail, isAdmin)
+        .filter((item) => canEditFoodItem(byId.get(item.id), normalizedEmail, isAdmin));
       incoming.forEach((item) => byId.set(item.id, item));
       store.foodLibrary = [...byId.values()];
-      return { accepted: incoming.length, items: incoming, serverTime: new Date().toISOString() };
+      return { accepted: incoming.length, rejected: items.length - incoming.length, items: incoming, serverTime: new Date().toISOString() };
     },
     async getFinanceSnapshot(userId) {
       const normalizedEmail = normalizeEmail(userId);
@@ -435,7 +450,7 @@ function createMemoryRepository() {
       const email = normalizeEmail(payload.email);
       if (!email) return { error: { code: "VALIDATION_ERROR", message: "Email is required" } };
       const current = store.profiles.get(email) || { email, birthday: "", gender: "", setupComplete: false };
-      const role = serverRoleForEmail(email, current.role || "user");
+      const role = serverRoleForEmail(email);
       const subscriptionPlan = serverPlanForRole(role, planFromBillingStatus(payload.status, payload.plan));
       const nextProfile = sanitizeProfile({
         ...current,
@@ -511,15 +526,15 @@ async function createPostgresRepository() {
 
   async function ensureUser(profile = {}, userId = "local-demo-user") {
     const email = profile.email || (String(userId).includes("@") ? String(userId) : `${userId}@magerlife.local`);
-    const role = serverRoleForEmail(email, profile.role || "user");
-    const subscriptionPlan = serverPlanForRole(role, profile.subscriptionPlan || "free");
+    const role = serverRoleForEmail(email);
+    const subscriptionPlan = serverPlanForRole(role);
     const result = await pool.query(
       `
       insert into app_users (email, display_name, role, subscription_plan, last_active_at)
       values ($1, $2, $3, $4, now())
       on conflict (email) do update set
         display_name = coalesce(excluded.display_name, app_users.display_name),
-        role = case when app_users.role = 'admin' then app_users.role else excluded.role end,
+        role = excluded.role,
         subscription_plan = case when app_users.subscription_plan = 'pro' then app_users.subscription_plan else excluded.subscription_plan end,
         last_active_at = now(),
         updated_at = now()
@@ -1140,7 +1155,7 @@ async function createPostgresRepository() {
         setupComplete: Boolean(profile.setupComplete),
       });
       await upsertProfile(userId, nextProfile);
-      return { userId: normalizedEmail, profile: nextProfile, token: createSessionToken(normalizedEmail, nextProfile.role) };
+      return { userId: normalizedEmail, profile: nextProfile, token: createSessionToken(normalizedEmail) };
     },
     async loginAccount({ identifier, password } = {}) {
       const normalizedEmail = normalizeEmail(identifier);
@@ -1155,12 +1170,15 @@ async function createPostgresRepository() {
       if (isBootstrapAdminEmail(normalizedEmail)) {
         await pool.query("update app_users set role = 'admin', subscription_plan = 'pro', updated_at = now() where email = $1", [normalizedEmail]);
       }
-      await pool.query("update app_users set last_active_at = now(), updated_at = now() where email = $1", [normalizedEmail]);
+      await pool.query(
+        "update app_users set role = $2, last_active_at = now(), updated_at = now() where email = $1",
+        [normalizedEmail, serverRoleForEmail(normalizedEmail)]
+      );
       const profile = await getProfileByEmail(normalizedEmail);
       return {
         userId: normalizedEmail,
         profile: profile || sanitizeProfile({ email: normalizedEmail, birthday: "", gender: "", setupComplete: false }),
-        token: createSessionToken(normalizedEmail, profile?.role),
+        token: createSessionToken(normalizedEmail),
       };
     },
     async getProfile(userId) {
@@ -1197,12 +1215,24 @@ async function createPostgresRepository() {
         serverTime: new Date().toISOString(),
       };
     },
-    async upsertFoodLibrary({ items = [], userId } = {}) {
+    async upsertFoodLibrary({ items = [], userId, isAdmin = false } = {}) {
       const normalizedEmail = normalizeEmail(userId);
-      const incoming = normalizeFoodItems(items).map((item) => item.source === "user" ? { ...item, ownerEmail: item.ownerEmail || normalizedEmail } : item);
+      const scoped = scopeFoodItemsToEditor(normalizeFoodItems(items), normalizedEmail, isAdmin);
+      const existing = await pool.query(
+        `
+        select f.external_id, f.source, u.email as owner_email
+        from food_library_items f
+        left join app_users u on u.id = f.owner_user_id
+        where f.external_id = any($1::text[])
+        `,
+        [scoped.map((item) => String(item.id))]
+      );
+      const existingById = new Map(existing.rows.map((row) => [row.external_id, { source: row.source, ownerEmail: normalizeEmail(row.owner_email || "") }]));
+      const incoming = scoped.filter((item) => canEditFoodItem(existingById.get(String(item.id)), normalizedEmail, isAdmin));
       const unknownNutrientKeys = await upsertFoodLibrary(incoming);
       return {
         accepted: incoming.length,
+        rejected: items.length - incoming.length,
         items: incoming,
         // Non-empty means the client offered a nutrient the catalog doesn't define,
         // so the admin learns the value wasn't stored instead of discovering it later.
@@ -1229,7 +1259,7 @@ async function createPostgresRepository() {
       const email = normalizeEmail(payload.email);
       if (!email) return { error: { code: "VALIDATION_ERROR", message: "Email is required" } };
       const current = (await getProfileByEmail(email)) || sanitizeProfile({ email, birthday: "", gender: "", setupComplete: false });
-      const role = serverRoleForEmail(email, current.role || "user");
+      const role = serverRoleForEmail(email);
       const subscriptionPlan = serverPlanForRole(role, planFromBillingStatus(payload.status, payload.plan));
       const userUuid = await ensureUser({ ...current, role, subscriptionPlan }, email);
       await pool.query(

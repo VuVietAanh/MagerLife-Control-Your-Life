@@ -422,6 +422,7 @@ export async function handleMagerLifeApiRequest(req, res) {
   }
 
   if (req.method === "POST" && url.pathname === "/chat/turn") {
+    if (!requireSession(req, res)) return;
     if (hasConfiguredLlm(body?.aiOverride)) {
       try {
         const result = await answerChatWithLlm({
@@ -450,6 +451,7 @@ export async function handleMagerLifeApiRequest(req, res) {
   }
 
   if (req.method === "POST" && url.pathname === "/nutrition/resolve-food") {
+    if (!requireSession(req, res)) return;
     if (hasConfiguredLlm(body?.aiOverride)) {
       try {
         sendJson(req, res, 200, await resolveFoodWithLlm({
@@ -495,8 +497,13 @@ export async function handleMagerLifeApiRequest(req, res) {
   }
 
   if (req.method === "GET" && url.pathname === "/food-library") {
-    if (body?.scope && body.scope !== "admin" && !requireSession(req, res, body?.userId || "")) return;
-    sendRepositoryResult(req, res, await persistenceRepository.getFoodLibrary(body));
+    if (!body?.scope || body.scope === "admin") {
+      sendRepositoryResult(req, res, await persistenceRepository.getFoodLibrary(body));
+      return;
+    }
+    const session = requireSession(req, res, body?.userId || "");
+    if (!session) return;
+    sendRepositoryResult(req, res, await persistenceRepository.getFoodLibrary({ ...body, userId: session.sub }));
     return;
   }
 
@@ -506,13 +513,18 @@ export async function handleMagerLifeApiRequest(req, res) {
   }
 
   if (req.method === "POST" && url.pathname === "/food-library") {
-    if (!requireSession(req, res, body?.userId || "")) return;
+    const session = requireSession(req, res, body?.userId || "");
+    if (!session) return;
     const validationError = validateFoodLibraryUpsert(body);
     if (validationError) {
       sendValidationError(req, res, validationError);
       return;
     }
-    sendRepositoryResult(req, res, await persistenceRepository.upsertFoodLibrary(body));
+    sendRepositoryResult(req, res, await persistenceRepository.upsertFoodLibrary({
+      ...body,
+      userId: session.sub,
+      isAdmin: session.role === "admin",
+    }));
     return;
   }
 
@@ -534,6 +546,7 @@ export async function handleMagerLifeApiRequest(req, res) {
   }
 
   if (req.method === "POST" && url.pathname === "/profile/update") {
+    if (!requireSession(req, res)) return;
     if (hasConfiguredLlm(body?.aiOverride) && body?.sourceText) {
       try {
         const extraction = await extractProfilePatchWithLlm({

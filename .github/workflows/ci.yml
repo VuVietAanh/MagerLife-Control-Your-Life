@@ -25,6 +25,9 @@ jobs:
       - name: Build frontend
         run: npm run build
 
+      - name: Server permission tests
+        run: npm test
+
       - name: Check deploy config
         run: npm run check:deploy
 
