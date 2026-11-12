@@ -1,5 +1,6 @@
 const baseUrl = (process.env.MAGERLIFE_SMOKE_API_BASE_URL || "https://mager-life-control-your-life.vercel.app/api").replace(/\/$/, "");
-const password = process.env.MAGERLIFE_SMOKE_PASSWORD || "Asura19.03!";
+// Throwaway account: random password per run unless one is provided
+const password = process.env.MAGERLIFE_SMOKE_PASSWORD || `Smoke-${crypto.randomUUID()}-A1!`;
 const email = `smoke-${Date.now()}@example.com`;
 
 async function request(label, path, options = {}) {

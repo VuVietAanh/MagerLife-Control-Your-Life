@@ -2,6 +2,7 @@ import http from "node:http";
 import { pathToFileURL } from "node:url";
 import { createPersistenceRepository, isRegistrationAllowed, verifySessionToken } from "./dbRepository.mjs";
 import { loadEnvFile } from "./envLoader.mjs";
+import { createMindspaceToken } from "./mindspaceToken.mjs";
 import { answerChatWithLlm, extractProfilePatchWithLlm, hasConfiguredLlm, resolveFoodWithLlm } from "./llmProvider.mjs";
 
 loadEnvFile();
@@ -349,6 +350,20 @@ export async function handleMagerLifeApiRequest(req, res) {
       return;
     }
     sendRepositoryResult(req, res, await persistenceRepository.loginAccount(body));
+    return;
+  }
+
+  // Short-lived token for the MindSpace chatbot ("Tâm sự"); the frontend asks again on a 401.
+  if (req.method === "POST" && url.pathname === "/mindspace/token") {
+    const session = requireSession(req, res);
+    if (!session) return;
+    const issued = createMindspaceToken(session);
+    if (!issued) {
+      console.error("MINDSPACE_SHARED_SECRET is missing or shorter than 32 characters");
+      sendJson(req, res, 503, { error: { code: "MINDSPACE_NOT_CONFIGURED", message: "Tâm sự chưa được cấu hình trên server." } });
+      return;
+    }
+    sendJson(req, res, 200, issued);
     return;
   }
 

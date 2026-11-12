@@ -1,44 +1,57 @@
 # MagerLife
 
-MagerLife is a personal life dashboard with an AI chat assistant. It is built for a single owner: sign-up is closed to everyone except the emails configured on the server.
+MagerLife là dashboard cá nhân kèm trợ lý AI dạng chat. App dành cho một chủ sở hữu: sign-up đóng với mọi email trừ các email cấu hình trên server.
 
-## Features
+## Tính năng
 
-- Dashboard: real-time clock and calendar (with lunar date), weather, daily planner, user state bar, calorie and meal tracking.
-- Chat assistant: conversation, meal logging from free text, and profile updates.
-- Jars: user-defined budget jars (by % or amount) and manual spending log, in VND or USD.
-- Food library: the admin curates the shared library; personal foods are private.
-- My Brain: review, confirm and delete what the assistant remembers.
-- Account: profile data and AI provider settings (Mock, Ollama, Groq, OpenAI, xAI).
+- **Dashboard:** đồng hồ, lịch (kèm âm lịch), thời tiết, planner trong ngày, thanh trạng thái người dùng, theo dõi kcal và bữa ăn.
+- **Chat assistant:** trò chuyện, ghi bữa ăn từ câu chữ tự do, cập nhật hồ sơ.
+- **Tâm sự:** chatbot tâm sự MindSpace (service Python riêng trong `mindspace/`), dùng chung tài khoản MagerLife.
+- **Jars:** hũ ngân sách tự định nghĩa (theo % hoặc số tiền) và sổ chi tiêu, VND hoặc USD.
+- **Food library:** admin quản lý kho món chung; món cá nhân chỉ chủ sở hữu thấy.
+- **My Brain:** xem, xác nhận và xóa những gì trợ lý ghi nhớ.
+- **Account:** hồ sơ và cấu hình AI provider (Mock, Ollama, Groq, OpenAI, xAI).
 
-## Code layout
+## Cấu trúc code
 
-- `src/app/App.tsx`: app state, session restore and tab switching.
-- `src/app/views/<tab>/`: one folder per tab (`dashboard`, `finance`, `food`, `account`, `brain`) plus `auth`.
-- `src/app/layout/`: header, navigation tabs and the per-view error boundary.
-- `src/app/ui/`, `lib/`, `hooks/`, `data/`: shared primitives, pure helpers (formatting, lunar calendar, meal text parsing), hooks and starter data.
-- `src/app/services/`, `models/`: API client, domain logic and types.
-- `src/server/`: the Node API used locally and by `api/[...path].js` on Vercel.
+| Thư mục | Nội dung |
+| --- | --- |
+| `src/app/App.tsx` | State của app, khôi phục phiên, chuyển tab |
+| `src/app/views/<tab>/` | Mỗi tab một thư mục: `dashboard`, `finance`, `food`, `account`, `brain`, cùng `auth` |
+| `src/app/layout/` | Header, thanh tab, error boundary cho từng view |
+| `src/app/ui/`, `lib/`, `hooks/`, `data/` | Component dùng chung, hàm thuần (định dạng, âm lịch, tách câu bữa ăn), hooks, dữ liệu khởi tạo |
+| `src/app/services/`, `models/` | API client, logic nghiệp vụ, kiểu dữ liệu |
+| `src/server/` | Node API, chạy local và qua `api/[...path].js` trên Vercel |
+| `docs/database/` | Schema, migration, seed và truy vấn kiểm tra Postgres |
+| `agent_training/` | Script sinh dữ liệu tổng hợp và train model gợi ý bữa ăn |
+| `mindspace/` | Chatbot tâm sự (Python, Claude), service và database riêng. Xem [mindspace/README.md](mindspace/README.md) |
 
-## Run
+## Chạy local
 
 ```bash
 npm install
-npm run dev
+cp .env.example .env      # điền giá trị thật, không commit file này
+npm run api:server        # API ở http://127.0.0.1:8787
+npm run dev               # frontend Vite
 ```
 
-## Build
+Mặc định `MAGERLIFE_DB_DRIVER=memory`, nên chạy được mà không cần database. Chạy cả stack với Postgres bằng Docker: xem mục 6 của [docs/deploy.md](docs/deploy.md).
+
+## Kiểm tra
 
 ```bash
-npm run build
+npm test               # test phân quyền server, chạy trên in-memory store, không gọi DB hay LLM thật
+npm run build          # build frontend
+npm run check:deploy   # kiểm tra cấu hình Vercel, schema, .env.example và tài liệu deploy
 ```
 
-## Test
+## Deploy
 
-```bash
-npm test
-```
+Push lên `main` của GitLab → GitLab CI kiểm tra, Vercel tự build và deploy (build dừng nếu `npm test` fail). Chi tiết, biến môi trường và các bước kiểm tra sau deploy: [docs/deploy.md](docs/deploy.md).
 
-The tests run against the in-memory store and never call a real database or LLM. Vercel runs them before every build.
+## Tài liệu khác
 
-This project intentionally keeps dependencies minimal: React, Vite, Tailwind, lucide-react, and pg.
+- `docs/backend-data-schema.md`, `docs/database/persistence-plan.md`: thiết kế dữ liệu ban đầu, viết khi frontend còn dùng `localStorage`.
+- `docs/agent-api-roadmap.md`: hướng phát triển Agent/API.
+
+Project cố ý giữ ít dependency: React, Vite, Tailwind, lucide-react và pg.

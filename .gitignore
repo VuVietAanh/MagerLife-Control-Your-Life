@@ -21,3 +21,10 @@ recovery-codes.txt
 
 # Python bytecode
 __pycache__/
+
+# MindSpace: tài liệu nguồn bên ngoài và dữ liệu sinh ra từ chúng (giữ ở máy, không commit)
+mindspace/data/knowledge_base/
+mindspace/data/chunks.json
+mindspace/data/faiss.index
+mindspace/static/backgrounds/
+mindspace/venv/

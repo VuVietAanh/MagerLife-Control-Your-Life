@@ -60,7 +60,7 @@ for (const key of ["MAGERLIFE_DB_DRIVER", "DATABASE_URL", "DATABASE_SSL", "MAGER
   assert(envExample.includes(`${key}=`), `.env.example must document ${key}.`);
 }
 
-const deployDoc = readText("docs/deploy-free-vercel-supabase.md");
+const deployDoc = readText("docs/deploy.md");
 assert(deployDoc.includes("VITE_MAGERLIFE_API_BASE_URL=/api"), "deploy doc must instruct Vercel API base as /api.");
 assert(deployDoc.includes("npm run smoke:production"), "deploy doc must mention production smoke test.");
 assert(deployDoc.includes("/api/health/db"), "deploy doc must mention /api/health/db.");

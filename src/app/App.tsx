@@ -20,6 +20,8 @@ import { BrainView } from "./views/brain/BrainView";
 import { FoodLibraryView } from "./views/food/FoodLibraryView";
 import { AccountView } from "./views/account/AccountView";
 import { Dashboard } from "./views/dashboard/Dashboard";
+import { MindspaceView } from "./views/mindspace/MindspaceView";
+import { clearMindspaceToken } from "./services/mindspaceClient";
 
 function shouldEnrichProfileWithApi(sourceText: string, patch: Partial<UserProfile>) {
   const normalized = sourceText.toLowerCase();
@@ -341,6 +343,7 @@ export default function App() {
 
   function handleLogout() {
     writeStoredSessionProfile(null);
+    clearMindspaceToken();
     setIsAuthenticated(false);
     setProfile(null);
     setJars(initialJars);
@@ -382,6 +385,7 @@ export default function App() {
         <ViewErrorBoundary key={tab} fallbackTitle={`Không mở được mục ${getNavigationTabs(profile).find((item) => item.id === tab)?.label || tab}`} onReset={() => setTab("dashboard")}>
           {tab === "dashboard" && <Dashboard jars={jars} transactions={transactions} profile={profile} currency={currency} adminFoodLibrary={adminFoodLibrary} onProfileUpdate={updateProfileFromConversation} />}
           {tab === "finance" && <FinanceView jars={jars} setJars={setJars} transactions={transactions} setTransactions={setTransactions} salary={monthlyIncome} currency={currency} savedJars={savedJars} setSavedJars={setSavedJars} setSavedTransactions={setSavedTransactions} />}
+          {tab === "talk" && <MindspaceView />}
           {tab === "account" && <AccountView profile={profile} onProfileUpdate={updateProfileFromConversation} />}
           {tab === "food-admin" && <FoodLibraryView profile={profile} onProfileUpdate={updateProfileFromConversation} foodLibrary={adminFoodLibrary} setFoodLibrary={setAdminFoodLibrary} />}
           {tab === "brain" && <BrainView memories={memories} setMemories={setMemories} agentEvents={agentEvents} />}

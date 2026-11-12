@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHmac } from "node:crypto";
 import { after, before, describe, test } from "node:test";
 
 // Set before the server module loads: loadEnvFile() only fills keys that are still empty,
@@ -7,6 +8,7 @@ process.env.MAGERLIFE_DB_DRIVER = "memory";
 process.env.MAGERLIFE_ADMIN_EMAILS = "owner@example.com";
 process.env.MAGERLIFE_ALLOWED_EMAILS = "friend@example.com,climber@example.com,guest@example.com";
 process.env.MAGERLIFE_SESSION_SECRET = "test-session-secret";
+process.env.MINDSPACE_SHARED_SECRET = "test-mindspace-secret-0123456789abcdef";
 process.env.MAGERLIFE_LLM_PROVIDER = "groq";
 process.env.MAGERLIFE_ENABLE_REAL_LLM = "true";
 process.env.GROQ_API_KEY = "server-key-for-tests";
@@ -163,6 +165,56 @@ describe("LLM routes", () => {
     assert.ok(outboundRequests.length > 0);
     for (const request of outboundRequests) {
       assert.ok(!request.url.includes("attacker.test"), `leaked to ${request.url}`);
+    }
+  });
+});
+
+describe("mindspace token", () => {
+  async function sessionToken(email) {
+    const registered = await api("POST", "/auth/register", { body: { email, password: PASSWORD, profile: { name: email } } });
+    if (registered.status === 201) return registered.data.token;
+    return (await login(email)).token;
+  }
+
+  function decode(token) {
+    const [header, payload, signature] = token.split(".");
+    const expected = createHmac("sha256", process.env.MINDSPACE_SHARED_SECRET).update(`${header}.${payload}`).digest("base64url");
+    return { header: JSON.parse(Buffer.from(header, "base64url")), claims: JSON.parse(Buffer.from(payload, "base64url")), validSignature: signature === expected };
+  }
+
+  test("requires a MagerLife session", async () => {
+    assert.equal((await api("POST", "/mindspace/token")).status, 401);
+    assert.equal((await api("POST", "/mindspace/token", { token: "forged.token" })).status, 401);
+  });
+
+  test("is a signed HS256 JWT for the session's email, valid for one hour", async () => {
+    const { status, data } = await api("POST", "/mindspace/token", { token: await sessionToken("friend@example.com") });
+    assert.equal(status, 200);
+    const { header, claims, validSignature } = decode(data.token);
+    assert.equal(validSignature, true);
+    assert.deepEqual(header, { alg: "HS256", typ: "JWT" });
+    assert.equal(claims.sub, "friend@example.com");
+    assert.equal(claims.aud, "mindspace");
+    assert.equal(claims.iss, "magerlife");
+    assert.equal(claims.role, "user");
+    assert.equal(claims.exp - claims.iat, 3600);
+  });
+
+  test("carries the server-side admin role", async () => {
+    const { data } = await api("POST", "/mindspace/token", { token: await sessionToken("owner@example.com") });
+    assert.equal(decode(data.token).claims.role, "admin");
+  });
+
+  test("fails closed when the shared secret is missing or short", async () => {
+    const token = await sessionToken("friend@example.com");
+    const saved = process.env.MINDSPACE_SHARED_SECRET;
+    process.env.MINDSPACE_SHARED_SECRET = "too-short";
+    try {
+      const { status, data } = await api("POST", "/mindspace/token", { token });
+      assert.equal(status, 503);
+      assert.equal(data.error.code, "MINDSPACE_NOT_CONFIGURED");
+    } finally {
+      process.env.MINDSPACE_SHARED_SECRET = saved;
     }
   });
 });

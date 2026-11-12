@@ -1,0 +1,17 @@
+# MindSpace (Python) — bổ sung cho .gitignore gốc của MagerLife
+__pycache__/
+*.py[cod]
+venv/
+.venv/
+.env
+.env.*
+!.env.example
+*.db
+*.sqlite
+*.sqlite3
+.cache/
+*.log
+.pytest_cache/
+eval_result*.md
+scenario_result*.md
+simulated_result*.md

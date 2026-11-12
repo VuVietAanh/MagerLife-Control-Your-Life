@@ -10,3 +10,7 @@ yarn-debug.log*
 pnpm-debug.log*
 Dockerfile*
 docker-compose*.yml
+mindspace
+agent_training
+*.csv
+recovery-codes*

@@ -1,0 +1,23 @@
+# MindSpace API (Vercel, Python)
+# Không có torch/transformers: embedding chạy trên HF Space (AI_SERVICE_URL),
+# cảm xúc và câu trả lời do Claude xử lý.
+
+fastapi>=0.110.0
+uvicorn>=0.29.0
+pydantic>=2.0.0
+PyJWT>=2.8.0
+
+# LLM
+anthropic>=2.3.0
+
+# RAG
+faiss-cpu>=1.7.4
+numpy>=1.26.0
+pypdf>=4.0.0
+httpx>=0.27.0
+
+# Database
+sqlalchemy>=2.0.0
+psycopg2-binary>=2.9.9
+
+python-dotenv>=1.0.0
