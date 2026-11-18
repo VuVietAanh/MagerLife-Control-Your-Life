@@ -50,9 +50,8 @@ Số và giờ có thể đổi: kiểm tra lại định kỳ. Chưa tìm đư�
 
 ### Dữ liệu nhạy cảm
 
-- **Thời hạn lưu: 30 ngày kể từ tin nhắn cuối của mỗi cuộc trò chuyện.** Quá hạn thì cuộc đó bị xoá hẳn, gồm tin nhắn và `conversation_emotion` (`purge_expired_conversations` trong `db/crud.py`).
-  - Việc xoá chạy mỗi lần gọi `/api/start` hoặc `/api/conversation/new`, nên nếu không ai mở app thì dữ liệu quá hạn vẫn nằm đó tới lần mở sau.
-  - Muốn xoá đúng hạn dù không ai dùng, cần thêm một Vercel Cron gọi hằng ngày. Việc này chưa làm, sẽ làm cùng bước deploy.
+- **Lịch sử được giữ mãi.** Cuộc trò chuyện chỉ mất khi người dùng tự xoá bằng nút Xoá trong tab Tâm sự (`DELETE /api/conversation/{id}`), xoá hẳn tin nhắn và `conversation_emotion`.
+  - Muốn bật lại tự xoá: đặt `MINDSPACE_RETENTION_DAYS=<số ngày>`. Khi đó mỗi lần gọi `/api/conversation/new` sẽ xoá các cuộc có tin cuối quá hạn (`purge_expired_conversations` trong `db/crud.py`).
 - `emotion_state.last_crisis_at` tự xoá sau 72 giờ.
 - `emotion_state` (EMA cảm xúc gộp theo user) không bị xoá theo cuộc trò chuyện.
 - Cần ghi các điểm trên vào chính sách quyền riêng tư của app.

@@ -278,7 +278,7 @@ def new_conversation(req: NewConvRequest, auth_uid: str = Depends(get_current_us
                      db: Session = Depends(get_db)):
     from db.crud import create_conversation, get_recent_conversations, purge_expired_conversations
     _require_self(auth_uid, req.user_id)
-    purge_expired_conversations(db)   # thời hạn lưu: 30 ngày kể từ tin cuối của mỗi cuộc
+    purge_expired_conversations(db)   # mặc định giữ mãi; chỉ xoá khi đặt MINDSPACE_RETENTION_DAYS
 
     # Mở tab Tâm sự nhiều lần không sinh thêm cuộc trống: dùng lại cuộc trống gần nhất
     conv    = _latest_empty_conversation(db, req.user_id) or create_conversation(db, user_id=req.user_id)

@@ -365,7 +365,7 @@ _now = datetime.utcnow()
 checks.append(("when_phrase: 22 giờ trước có số giờ", "22 giờ trước" in when_phrase(_now - timedelta(hours=22), timedelta(hours=22))))
 checks.append(("when_phrase: 50 giờ trước không phải hôm nay", not when_phrase(_now - timedelta(hours=50), timedelta(hours=50)).startswith("hôm nay")))
 
-# Thời hạn lưu: cuộc có tin cuối quá 30 ngày bị xoá hẳn, cuộc mới còn nguyên
+# Thời hạn lưu: mặc định giữ mãi; khi đặt 30 ngày thì cuộc có tin cuối quá hạn bị xoá hẳn, cuộc mới còn nguyên
 from db.crud import purge_expired_conversations  # noqa: E402
 fake.analysis = analysis(joy=0.3)
 conv_old2 = new_conv(); chat(conv_old2, "chuyện cũ")
@@ -374,11 +374,15 @@ _s = A._Session()
 _s.query(_Mc).filter(_Mc.conversation_id == conv_old2).update({_Mc.timestamp: datetime.utcnow() - timedelta(days=31)})
 _s.query(_Cc).filter(_Cc.conversation_id == conv_old2).update({_Cc.started_at: datetime.utcnow() - timedelta(days=31)})
 _s.commit()
-n_purged = purge_expired_conversations(_s)
+os.environ.pop("MINDSPACE_RETENTION_DAYS", None)
+n_default = purge_expired_conversations(_s)
+kept_default = _s.query(_Mc).filter(_Mc.conversation_id == conv_old2).count()
+n_purged = purge_expired_conversations(_s, days=30)
 left_old = _s.query(_Mc).filter(_Mc.conversation_id == conv_old2).count() + \
     _s.query(_Cc).filter(_Cc.conversation_id == conv_old2).count()
 left_new = _s.query(_Mc).filter(_Mc.conversation_id == conv_new2).count()
 _s.close()
+checks.append(("Mặc định giữ mãi: không xoá cuộc cũ", n_default == 0 and kept_default == 1))
 checks.append(("Quá 30 ngày: xoá cuộc và tin nhắn", n_purged >= 1 and left_old == 0))
 checks.append(("Cuộc còn hạn không bị xoá", left_new == 1))
 

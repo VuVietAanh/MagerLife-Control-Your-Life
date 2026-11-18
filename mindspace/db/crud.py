@@ -2,6 +2,7 @@
 # db/crud.py
 # ============================================================
 
+import os
 from datetime import date, datetime, timedelta
 
 from sqlalchemy import create_engine
@@ -154,13 +155,25 @@ def delete_conversation(session: Session, conversation_id: str) -> bool:
     return True
 
 
-RETENTION_DAYS = 30
+def retention_days() -> int:
+    """Số ngày giữ một cuộc trò chuyện, đọc từ MINDSPACE_RETENTION_DAYS.
+
+    Không đặt, 0 hoặc giá trị sai = giữ mãi; người dùng tự xoá trong app."""
+    try:
+        return max(0, int(os.getenv("MINDSPACE_RETENTION_DAYS", "0")))
+    except ValueError:
+        return 0
 
 
-def purge_expired_conversations(session: Session, days: int = RETENTION_DAYS) -> int:
+def purge_expired_conversations(session: Session, days: int | None = None) -> int:
     """Xoá hẳn các cuộc trò chuyện đã quá `days` ngày kể từ tin nhắn cuối (hoặc lúc tạo, nếu chưa có tin).
 
+    `days` mặc định lấy từ retention_days(); 0 thì không xoá gì.
     Xoá cả tin nhắn và snapshot cảm xúc của cuộc đó. Trả về số cuộc đã xoá."""
+    if days is None:
+        days = retention_days()
+    if days <= 0:
+        return 0
     from sqlalchemy import func as _f
     cutoff = datetime.utcnow() - timedelta(days=days)
     last_msg = (session.query(Message.conversation_id, _f.max(Message.timestamp).label("last_at"))
