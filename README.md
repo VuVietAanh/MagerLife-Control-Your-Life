@@ -12,6 +12,10 @@ MagerLife là dashboard cá nhân kèm trợ lý AI dạng chat. App dành cho m
 - **My Brain:** xem, xác nhận và xóa những gì trợ lý ghi nhớ.
 - **Account:** hồ sơ và cấu hình AI provider (Mock, Ollama, Groq, OpenAI, xAI).
 
+## Cài như app trên laptop
+
+MagerLife là PWA: `public/manifest.webmanifest` cùng bộ icon trong `public/icons/`. Mở bản đã deploy bằng Chrome hoặc Edge, chọn biểu tượng "Cài đặt" ở cuối thanh địa chỉ (hoặc menu ⋮ → Truyền phát, lưu và chia sẻ → Cài đặt trang dưới dạng ứng dụng). App mở trong cửa sổ riêng, có icon ở Start menu/taskbar và tự cập nhật mỗi lần deploy. Chưa có service worker nên app cần mạng để chạy. Giao diện điện thoại chưa được tối ưu.
+
 ## Cấu trúc code
 
 | Thư mục | Nội dung |
