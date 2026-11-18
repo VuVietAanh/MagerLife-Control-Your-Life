@@ -35,7 +35,7 @@ export function SeasonalDecor({ mode }: SeasonalDecorProps) {
           onError={(event) => {
             event.currentTarget.style.display = "none";
           }}
-          className={`absolute object-contain drop-shadow-md ${gif.className}`}
+          className={`absolute hidden object-contain drop-shadow-md lg:block ${gif.className}`}
           style={{ animation: gif.animation }}
         />
       ))}

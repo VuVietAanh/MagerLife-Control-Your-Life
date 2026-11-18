@@ -8,7 +8,7 @@ import { getAuthAccount, saveAuthAccount } from "../../services/authAccountServi
 import { saveAuthSessionToken } from "../../services/authSessionService";
 import { extractSignalsFromFreeText, profileSignalChips } from "../../services/profileService";
 import { MAGERLIFE_API_BASE_URL } from "../../services/apiConfig";
-import { getApiDbHealth, loginAccountViaApi, registerAccountViaApi, saveProfileToApi } from "../../services/magerLifeApiFacade";
+import { loginAccountViaApi, saveProfileToApi } from "../../services/magerLifeApiFacade";
 import { salary, createStarterJarsForCurrency } from "../../data/starterData";
 import { formatCurrency, usdToVndRate } from "../../lib/format";
 import { Mono } from "../../ui/primitives";
@@ -168,7 +168,7 @@ function AuthStoryPanel() {
             <div className="absolute left-[-8%] top-[34%] h-20 w-[58%] rotate-[-18deg] rounded-[50%] border border-emerald-100/36 border-r-transparent border-t-transparent" />
             <div className="absolute right-[-12%] bottom-[26%] h-[72px] w-[56%] rotate-[-10deg] rounded-[50%] border border-blue-100/32 border-l-transparent border-b-transparent" />
             <div className="absolute inset-x-8 bottom-5 h-11 rounded-[50%] border border-cyan-100/18 bg-cyan-100/8" />
-            <div className="relative grid grid-cols-4 gap-3 pt-11">
+            <div className="relative grid grid-cols-2 gap-x-3 gap-y-12 pt-11 sm:grid-cols-4 sm:gap-y-3">
                 {systemNodes.map((node, index) => {
                   const isActive = activeNode === node.id;
                   const isDimmed = Boolean(activeNode && !isActive);
@@ -184,7 +184,7 @@ function AuthStoryPanel() {
                       type="button"
                       onMouseEnter={() => setActiveNode(node.id)}
                       title={node.description}
-                      className={`group relative flex h-[205px] w-full min-w-0 flex-col items-center justify-center rounded-[24px] border border-white/34 bg-cyan-950/24 px-2 text-center shadow-xl shadow-emerald-950/18 backdrop-blur-xl transition-all duration-500 ${
+                      className={`group relative flex h-[170px] sm:h-[205px] w-full min-w-0 flex-col items-center justify-center rounded-[24px] border border-white/34 bg-cyan-950/24 px-2 text-center shadow-xl shadow-emerald-950/18 backdrop-blur-xl transition-all duration-500 ${
                         isActive
                           ? "-translate-y-3 scale-[1.025] border-white/70 bg-cyan-950/34 shadow-2xl z-30"
                           : "hover:-translate-y-3 hover:scale-[1.025] hover:bg-cyan-950/30"
@@ -245,7 +245,6 @@ function AuthStoryPanel() {
 }
 
 export function AuthFlow({ onComplete }: { onComplete: (profile: UserProfile) => void }) {
-  const [mode, setMode] = useState<"login" | "register">("register");
   const [step, setStep] = useState<"account" | "verify" | "enrich" | "priority" | "confirm">("account");
   const [error, setError] = useState("");
   const [form, setForm] = useState({
@@ -288,13 +287,6 @@ export function AuthFlow({ onComplete }: { onComplete: (profile: UserProfile) =>
     customChoiceInputs: {} as Record<string, string>,
   });
 
-  const passwordChecks = [
-    { label: "Dài hơn 8 ký tự", valid: form.password.length > 8 },
-    { label: "Có ít nhất 1 chữ cái viết hoa", valid: /[A-Z]/.test(form.password) },
-    { label: "Có ít nhất 1 số", valid: /\d/.test(form.password) },
-    { label: "Có ít nhất 1 ký tự đặc biệt", valid: /[^A-Za-z0-9]/.test(form.password) },
-  ];
-  const passwordValid = passwordChecks.every((item) => item.valid);
   const currentChoiceSections = [
     { title: "Công việc", key: "workTypes", max: 3, options: ["Học sinh / Sinh viên", "Nhân viên văn phòng", "Freelancer", "Kinh doanh tự do", "Lao động chân tay", "Làm việc theo ca", "Remote / Work from Home"] },
     { title: "Mức độ bận rộn", key: "busyness", max: 1, options: ["Nhàn rỗi", "Bình thường", "Tương đối linh hoạt", "Thời gian rất linh hoạt", "Khá bận", "Luôn bận rộn"] },
@@ -696,104 +688,48 @@ export function AuthFlow({ onComplete }: { onComplete: (profile: UserProfile) =>
 
   async function submitAccount() {
     setError("");
-    if (mode === "login") {
-      if (!form.identifier.trim() || !form.password) {
-        setError("Vui lòng nhập email/tên đăng nhập và mật khẩu.");
-        return;
-      }
-      if (!passwordValid) {
-        setError("Mật khẩu demo cần đạt đủ các quy định bảo mật để tiếp tục test.");
-        return;
-      }
-      const accountKey = form.identifier.trim().toLowerCase();
-      const apiLogin = await loginAccountViaApi({
-        identifier: accountKey,
-        password: form.password,
-      });
-      if (apiLogin.ok && apiLogin.data?.profile) {
-        if (apiLogin.data.token) saveAuthSessionToken(apiLogin.data.token);
-        const apiProfile = apiLogin.data.profile;
-        applyStoredProfile(apiProfile);
-        const apiHasRequiredKcalProfile = Boolean(apiProfile.birthday && apiProfile.gender && Number(apiProfile.weight) > 0 && Number(apiProfile.height) > 0);
-        if (apiProfile.setupComplete && apiHasRequiredKcalProfile) {
-          onComplete(apiProfile);
-          return;
-        }
-        setError("Tài khoản này chưa đủ dữ liệu nền để tính kcal. Vui lòng bổ sung cân nặng, chiều cao và các thông tin còn thiếu.");
-        setStep("enrich");
-        return;
-      }
-      if (apiLogin.error?.code !== "NETWORK_ERROR") {
-        setError("Email hoặc mật khẩu không đúng.");
-        return;
-      }
-      const storedProfile = getAuthAccount<UserProfile>(accountKey);
-      if (!storedProfile) {
-        setError("Chưa tìm thấy tài khoản này. Hãy đăng ký trước để hệ thống ghi nhận hồ sơ.");
-        return;
-      }
-      applyStoredProfile(storedProfile);
-      const storedHasRequiredKcalProfile = Boolean(storedProfile.birthday && storedProfile.gender && Number(storedProfile.weight) > 0 && Number(storedProfile.height) > 0);
-      if (storedProfile.setupComplete && storedHasRequiredKcalProfile) {
-        onComplete(storedProfile);
+    if (!form.identifier.trim() || !form.password) {
+      setError("Vui lòng nhập email/tên đăng nhập và mật khẩu.");
+      return;
+    }
+    const accountKey = form.identifier.trim().toLowerCase();
+    const apiLogin = await loginAccountViaApi({
+      identifier: accountKey,
+      password: form.password,
+    });
+    if (apiLogin.ok && apiLogin.data?.profile) {
+      if (apiLogin.data.token) saveAuthSessionToken(apiLogin.data.token);
+      const apiProfile = apiLogin.data.profile;
+      applyStoredProfile(apiProfile);
+      const apiHasRequiredKcalProfile = Boolean(apiProfile.birthday && apiProfile.gender && Number(apiProfile.weight) > 0 && Number(apiProfile.height) > 0);
+      if (apiProfile.setupComplete && apiHasRequiredKcalProfile) {
+        onComplete(apiProfile);
         return;
       }
       setError("Tài khoản này chưa đủ dữ liệu nền để tính kcal. Vui lòng bổ sung cân nặng, chiều cao và các thông tin còn thiếu.");
       setStep("enrich");
       return;
     }
-
-    if (!form.email.trim() || !form.birthday || !form.gender) {
-      setError("Đăng ký bắt buộc có email, ngày/tháng/năm sinh và giới tính.");
-      return;
-    }
-    if (!passwordValid) {
-      setError("Mật khẩu chưa đạt đủ quy định bắt buộc.");
-      return;
-    }
-    const accountKey = form.email.trim().toLowerCase();
-    const draftProfile: UserProfile = {
-      email: form.email.trim(),
-      birthday: form.birthday,
-      gender: form.gender,
-      weight: form.weight,
-      height: form.height,
-      currency: form.currency,
-      setupComplete: false,
-      role: "user",
-    };
-    const apiRegister = await registerAccountViaApi({
-      email: accountKey,
-      password: form.password,
-      profile: draftProfile,
-    });
-    if (apiRegister.ok && apiRegister.data?.profile) {
-      if (apiRegister.data.token) saveAuthSessionToken(apiRegister.data.token);
-      applyStoredProfile(apiRegister.data.profile);
-      setError("");
-      setStep("enrich");
-      return;
-    }
-    if (apiRegister.error?.code === "REGISTRATION_CLOSED") {
-      setError(apiRegister.error.message);
-      return;
-    }
-    if (apiRegister.error?.code !== "NETWORK_ERROR") {
-      const dbHealth = await getApiDbHealth();
-      const dbHint = dbHealth.ok && dbHealth.data
-        ? ` DB=${dbHealth.data.driver}, pooler=${dbHealth.data.database?.pooler ? "yes" : "no"}, schema=${dbHealth.data.connection?.schemaReady ? "yes" : "no"}.`
-        : ` DB health lỗi: ${dbHealth.error?.message || "không gọi được /health/db"}.`;
-      setError(apiRegister.error?.code === "HTTP_409" || apiRegister.error?.code === "ACCOUNT_EXISTS"
-        ? "Email này đã được đăng ký."
-        : `Chưa thể đăng ký tài khoản qua API: ${apiRegister.error?.message || apiRegister.error?.code || "Không rõ lỗi"}.${dbHint}`);
+    if (apiLogin.error?.code !== "NETWORK_ERROR") {
+      setError("Email hoặc mật khẩu không đúng.");
       return;
     }
     if (!isLocalBrowserHost()) {
-      setError(`Không gọi được API tại ${MAGERLIFE_API_BASE_URL}. Kiểm tra Vercel env VITE_MAGERLIFE_API_BASE_URL=/api rồi Redeploy.`);
+      setError(`Không gọi được API tại ${MAGERLIFE_API_BASE_URL}. Kiểm tra mạng hoặc cấu hình VITE_MAGERLIFE_API_BASE_URL.`);
       return;
     }
-    saveAuthAccount<UserProfile>(accountKey, draftProfile);
-    setError("");
+    const storedProfile = getAuthAccount<UserProfile>(accountKey);
+    if (!storedProfile) {
+      setError("Không gọi được API và chưa có tài khoản này trên máy.");
+      return;
+    }
+    applyStoredProfile(storedProfile);
+    const storedHasRequiredKcalProfile = Boolean(storedProfile.birthday && storedProfile.gender && Number(storedProfile.weight) > 0 && Number(storedProfile.height) > 0);
+    if (storedProfile.setupComplete && storedHasRequiredKcalProfile) {
+      onComplete(storedProfile);
+      return;
+    }
+    setError("Tài khoản này chưa đủ dữ liệu nền để tính kcal. Vui lòng bổ sung cân nặng, chiều cao và các thông tin còn thiếu.");
     setStep("enrich");
   }
 
@@ -886,100 +822,33 @@ export function AuthFlow({ onComplete }: { onComplete: (profile: UserProfile) =>
     onComplete(nextProfile);
   }
 
-  const decorMode: AuthDecorMode = step === "account" ? mode : step === "verify" ? "register" : step;
+  const decorMode: AuthDecorMode = step === "account" ? "login" : step === "verify" ? "register" : step;
 
   return (
     <main className="min-h-screen bg-slate-50">
       <div className="grid min-h-screen grid-cols-1 lg:grid-cols-[620px_1fr]">
         <AuthStoryPanel />
-        <section className="relative flex min-h-screen items-center justify-center overflow-hidden px-5 py-10 md:px-10">
+        <section className="relative order-first flex min-h-[100svh] items-center justify-center overflow-hidden px-5 py-10 md:px-10 lg:order-none lg:min-h-screen">
         <SeasonalDecor mode={decorMode} />
           <div className={`relative z-10 ${step === "account" ? "w-full max-w-lg" : "w-full max-w-3xl"} transition-all`}>
             {step === "account" && (
               <>
-                <div className="mb-8 flex justify-center">
-                  <div className="rounded-full bg-white p-1 shadow-sm">
-                  {(["register", "login"] as const).map((item) => (
-                    <button
-                      key={item}
-                      onClick={() => {
-                        setMode(item);
-                        setError("");
-                      }}
-                      className={`h-10 rounded-full px-7 text-sm font-bold transition-colors ${mode === item ? "bg-slate-950 text-white shadow-lg shadow-slate-300/60" : "text-slate-500 hover:text-slate-900"}`}
-                    >
-                      {item === "register" ? "Đăng ký" : "Đăng nhập"}
-                    </button>
-                  ))}
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {mode === "login" ? (
-                    <label className="space-y-1.5 md:col-span-2">
-                      <span className="text-xs font-semibold text-slate-500">Email hoặc tên đăng nhập tự do</span>
-                      <input value={form.identifier} onChange={(event) => patchForm("identifier", event.target.value)} placeholder="Email hoặc username" className="w-full rounded-full border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:border-emerald-400" />
-                    </label>
-                  ) : (
-                    <>
-                      <label className="space-y-1.5 md:col-span-2">
-                        <span className="text-xs font-semibold text-slate-500">Email (Bắt buộc)</span>
-                        <input type="email" value={form.email} onChange={(event) => patchForm("email", event.target.value)} placeholder="you@example.com" className="w-full rounded-full border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:border-emerald-400" />
-                      </label>
-                      <label className="space-y-1.5">
-                        <span className="text-xs font-semibold text-slate-500">Tháng/Ngày/Năm sinh</span>
-                        <input type="date" max={new Date().toISOString().slice(0, 10)} value={form.birthday} onChange={(event) => patchForm("birthday", event.target.value)} className="w-full rounded-full border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:border-emerald-400" />
-                      </label>
-                      <label className="space-y-1.5">
-                        <span className="text-xs font-semibold text-slate-500">Giới tính</span>
-                        <select value={form.gender} onChange={(event) => patchForm("gender", event.target.value)} className="w-full rounded-full border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:border-emerald-400">
-                          <option value="">Chọn giới tính</option>
-                          <option>Nam</option>
-                          <option>Nữ</option>
-                          <option>Khác</option>
-                          <option>Không muốn nói</option>
-                        </select>
-                      </label>
-                    </>
-                  )}
-
-                  <label className="space-y-1.5 md:col-span-2">
+                <h2 className="mb-6 text-center text-2xl font-black text-slate-900">Đăng nhập</h2>
+                <div className="grid grid-cols-1 gap-3">
+                  <label className="space-y-1.5">
+                    <span className="text-xs font-semibold text-slate-500">Email hoặc tên đăng nhập</span>
+                    <input value={form.identifier} onChange={(event) => patchForm("identifier", event.target.value)} placeholder="Email hoặc username" autoComplete="username" className="w-full rounded-full border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:border-emerald-400" />
+                  </label>
+                  <label className="space-y-1.5">
                     <span className="text-xs font-semibold text-slate-500">Mật khẩu</span>
-                    <input type="password" value={form.password} onChange={(event) => patchForm("password", event.target.value)} placeholder="Tạo mật khẩu..." className="w-full rounded-full border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:border-emerald-400" />
+                    <input type="password" value={form.password} onChange={(event) => patchForm("password", event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") void submitAccount(); }} placeholder="Nhập mật khẩu..." autoComplete="current-password" className="w-full rounded-full border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:border-emerald-400" />
                   </label>
                 </div>
 
-                <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-2">
-                  {passwordChecks.map((rule) => (
-                    <div key={rule.label} className={`rounded-lg border px-3 py-2 text-xs font-semibold ${rule.valid ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-slate-200 bg-slate-50 text-slate-500"}`}>
-                      {rule.valid ? "✓" : "○"} {rule.label}
-                    </div>
-                  ))}
-                </div>
-
-                {mode === "register" && (
-                  <div className="mt-5 grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <label className="space-y-1.5">
-                      <span className="text-xs font-semibold text-slate-500">Cân nặng(Kg) - (Không bắt buộc)</span>
-                      <input type="number" value={form.weight} onChange={(event) => patchForm("weight", event.target.value)} placeholder="VD: 72" className="w-full rounded-full border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:border-emerald-400" />
-                    </label>
-                    <label className="space-y-1.5">
-                      <span className="text-xs font-semibold text-slate-500">Chiều cao(cm) - (Không bắt buộc)</span>
-                      <input type="number" value={form.height} onChange={(event) => patchForm("height", event.target.value)} placeholder="VD: 173" className="w-full rounded-full border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:border-emerald-400" />
-                    </label>
-                  </div>
-                )}
-
                 {error && <p className="mt-4 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-700">{error}</p>}
                 <button onClick={submitAccount} className="mt-6 h-12 w-full rounded-full bg-emerald-500 px-5 text-sm font-bold text-white shadow-xl shadow-emerald-200 hover:bg-emerald-600">
-                  {mode === "register" ? "Tiếp tục xác minh" : "Đăng nhập"}
+                  Đăng nhập
                 </button>
-                <p className="mt-5 text-center text-sm text-slate-400">
-                  {mode === "register" ? "Đã có tài khoản?" : "Chưa có tài khoản?"}{" "}
-                  <button onClick={() => setMode(mode === "register" ? "login" : "register")} className="font-black text-emerald-600">
-                    {mode === "register" ? "Đăng nhập" : "Đăng ký ngay"}
-                  </button>
-                </p>
               </>
             )}
 
