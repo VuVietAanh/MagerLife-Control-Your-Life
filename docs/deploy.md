@@ -24,12 +24,10 @@ Production dùng **Neon** (Postgres serverless). Chạy SQL bằng SQL Editor tr
 | File | Khi nào chạy |
 | --- | --- |
 | `schema.sql` | Khởi tạo database mới: tài khoản, profile, hũ, giao dịch, nhật ký ăn, food library |
-| `migrate-nutrients-v3.sql` | Một lần, trước `seed-nutrients.sql` |
-| `migrate-nutrients-v4.sql` | Một lần, sau v3 và trước `seed-nutrients.sql` |
+| `nutrients-tables.sql` | Sau `schema.sql`, trước các file seed. Tạo bảng `nutrients`, `food_item_nutrients`, `meal_log_nutrients`, `probiotic_strains`, `food_item_probiotics` nếu chưa có, thêm cột còn thiếu, gộp luôn phần của v3/v4. Chạy lại an toàn |
+| `migrate-nutrients-v3.sql`, `migrate-nutrients-v4.sql` | Bản cũ, đã gộp vào `nutrients-tables.sql`; không cần chạy riêng |
 | `seed-nutrients.sql` | Sinh tự động bởi `node scripts/generate-nutrient-artifacts.mjs`; chạy lại an toàn |
 | `seed-probiotics.sql` | Sau v4 |
-
-> **Chưa đủ để dựng database mới từ đầu:** bảng `nutrients` được các migration `ALTER` nhưng câu `CREATE TABLE nutrients` không có trong repo. Database production hiện tại đã có bảng này; muốn dựng lại từ số 0 thì cần bổ sung DDL của nó vào `schema.sql` trước.
 
 Không chạy `seed-dev.sql` hay `reset-dev.sql` trên production: chúng dành cho môi trường dev và `reset-dev.sql` xóa dữ liệu.
 
