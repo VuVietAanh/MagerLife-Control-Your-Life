@@ -255,7 +255,8 @@ class ChatbotPipeline:
                 conversation_id=conversation_id,
                 current_emotion=emotion_result,
             )
-            if intent == Intent.VENTING:
+            # Đang xả, đang lẫn lộn cảm xúc hay chỉ trò chuyện: không gợi thêm câu hỏi về cảm xúc
+            if intent in (Intent.VENTING, Intent.EXPLORE, Intent.CASUAL):
                 reverse_question = None
 
             # Cảm xúc cao: chỉ là GỢI Ý Ý, generator tự diễn đạt (không gửi câu soạn sẵn)

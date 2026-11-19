@@ -18,11 +18,13 @@ class Intent(str, Enum):
     DEFER    = "defer"      # Để sau, chưa muốn nói
     REJECT   = "reject"     # Từ chối, muốn dừng
     VENTING  = "venting"    # Xả cảm xúc, cần được nghe
+    EXPLORE  = "explore"    # Chưa rõ / lẫn lộn cảm xúc → chưa vội hỏi nguyên nhân
     LISTEN   = "listen_only" # Nói rõ chỉ muốn được nghe → giữ chế độ chỉ nghe cả cuộc
     FEEDBACK = "feedback"   # Chê cách chatbot nói (như robot, sáo) — KHÔNG phải muốn dừng
     CONTINUE = "continue"   # Muốn kể tiếp
     GUIDANCE = "guidance"   # Bế tắc, hỏi nên làm gì, cần góc nhìn
     QUESTION = "question"   # Hỏi chatbot một điều cụ thể
+    CASUAL   = "casual"     # Trò chuyện thường ngày, không có chuyện nặng
     GREETING = "greeting"   # Chào hỏi
     CLOSING  = "closing"    # Tạm biệt, đi ngủ, kết thúc
     NEUTRAL  = "neutral"    # Không rõ
@@ -53,6 +55,15 @@ RESPONSE_STRATEGY = {
             "Người dùng đang xả cảm xúc. Ưu tiên nghe: phản chiếu đúng điều họ kể và cảm xúc bên dưới. Chưa khuyên. "
             "Có khi chỉ cần nghe và đáp lại, không hỏi; chỉ hỏi khi thật sự giúp họ kể tiếp. "
             "Nếu họ nói rõ chỉ muốn nói ra, chỉ nghe và để ngỏ."
+        ),
+    },
+    Intent.EXPLORE: {
+        "instruction": (
+            "Người dùng chưa gọi tên được mình đang cảm thấy gì, hoặc cảm xúc đang lẫn lộn. "
+            "Đừng vội hỏi nguyên nhân (chuyện gì xảy ra, vì sao). Cho họ thấy chưa rõ cũng không sao, "
+            "không cần sắp xếp cho gọn mới được kể. Có thể chạm nhẹ vào chính cảm giác đó (lúc này bên nào nhiều hơn, "
+            "nó giống cảm giác gì), hoặc để ngỏ cho họ kể theo cách nào cũng được, kể cả chỉ nói chuyện bình thường. "
+            "Tối đa một câu hỏi, và không hỏi cũng được. 1–3 câu."
         ),
     },
     Intent.LISTEN: {
@@ -91,6 +102,12 @@ RESPONSE_STRATEGY = {
         "instruction": (
             "Người dùng đang hỏi bạn. Trả lời thật lòng, cụ thể, gần gũi, không giảng giải. "
             "Nếu thấy tự nhiên, sau đó hỏi một câu liên quan tới chính họ."
+        ),
+    },
+    Intent.CASUAL: {
+        "instruction": (
+            "Người dùng đang trò chuyện bình thường, không có gì nặng. Đáp như bạn bè: bám đúng chuyện họ nói, "
+            "có thể kể nhẹ hay đùa lại. Không hỏi về cảm xúc, không biến thành buổi tâm sự. Chỉ hỏi khi thật tự nhiên. 1–3 câu."
         ),
     },
     Intent.GREETING: {

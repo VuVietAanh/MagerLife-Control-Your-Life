@@ -22,6 +22,7 @@ tin nhắn
 
 - Cách nói chuyện: **nghe trước, rồi mới thật lòng**. Lúc đầu phản chiếu và hỏi để hiểu; khi đã hiểu hoặc khi người dùng bế tắc / hỏi nên làm gì (intent `guidance`) thì nói góc nhìn, được nhẹ nhàng không đồng ý khi họ tự hạ thấp mình, gợi 1–2 việc nhỏ cụ thể, khoảng 120 chữ. Không bắt buộc kết bằng câu hỏi; tạm biệt hoặc vừa ra quyết định thì không hỏi thêm.
 - Bị chê cách nói (intent `feedback`: "nói như robot") thì không phải muốn dừng. Bot nhận ngắn rồi đổi giọng.
+- Chưa rõ hoặc lẫn lộn cảm xúc (intent `explore`: "không rõ lắm, có chút vui có chút buồn"): không vội hỏi nguyên nhân, cho họ thấy chưa gọi tên được cũng không sao, tối đa một câu hỏi và có thể không hỏi. Trò chuyện bình thường (intent `casual`): đáp như bạn bè, không xoáy vào cảm xúc.
 - Người dùng bảo "đừng hỏi thêm" thì cả cuộc trò chuyện không hỏi nữa, trừ câu hỏi an toàn. Phát hiện bằng regex trên các tin của cuộc đó.
 - Bot không tự nhận là chỗ dựa ("mình ở đây") với người đang cô đơn. Khi để cửa mở, người thật được nhắc trước, bot sau.
 - Đã có tín hiệu mơ hồ, cộng với tình trạng kéo dài nhiều tuần hoặc nhiều tháng: bot gợi một lần việc gặp chuyên gia trước khi cuộc trò chuyện kết thúc. Luật này nằm trong prompt, chưa có code đếm.
