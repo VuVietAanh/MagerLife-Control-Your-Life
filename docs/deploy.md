@@ -1,21 +1,29 @@
 # Deploy MagerLife
 
-MagerLife có một đường deploy duy nhất: **GitLab → Vercel**. Repo GitHub cũ không còn dùng.
+Code nằm ở GitHub: `VuVietAanh/MagerLife-Control-Your-Life`. Repo GitLab cũ không còn dùng.
 
 ```text
-git push origin main
-        │
-        ├──► GitLab CI (.gitlab-ci.yml)      build, test, check:deploy, check cú pháp server
-        │
-        └──► Vercel (Git integration với GitLab)
-               buildCommand: npm test && npm run build   (test fail → không deploy)
-               ├── dist/                 frontend Vite
-               └── api/[...path].js      Node API (serverless) → src/server/
-                        │
-                        └──► Neon Postgres (DATABASE_URL, SSL)
+nhánh feature/... ──PR──► dev ──PR──► main ──► Vercel production
+        │                  │                     buildCommand: npm test && npm run build
+        └── GitHub Actions (.github/workflows/ci.yml) chạy cho mọi PR vào dev/main:
+              web:       npm ci, build, npm test, check:deploy, check cú pháp server
+              mindspace: test Python (keyword filter, auth, PIN, pipeline offline)
 ```
 
-GitLab CI và Vercel chạy song song và độc lập: Vercel không chờ GitLab CI. Hàng rào chặn deploy lỗi là `npm test` trong build của Vercel; GitLab CI là lớp kiểm tra thứ hai và chạy thêm `check:deploy`.
+## 0. Quy trình làm việc
+
+1. Mỗi việc làm trên một nhánh riêng `feature/<tên-việc>` (hoặc `fix/...`) tách từ `dev`. Không commit thẳng vào `dev` hay `main`.
+2. Push nhánh, mở Pull Request vào `dev`. CI chạy tự động.
+3. Người review (không phải người viết code) duyệt PR. CI xanh và đã được duyệt thì merge vào `dev`.
+4. Khi muốn phát hành: mở PR từ `dev` vào `main`. Merge vào `main` là Vercel deploy production.
+
+Cài đặt một lần trên GitHub (repo → Settings → Branches → Add branch ruleset, cho cả `dev` và `main`):
+
+- Require a pull request before merging, Required approvals: 1.
+- Require status checks to pass: chọn `web (build, test, check:deploy)` và `mindspace (Python tests)`.
+- Block force pushes, Restrict deletions.
+
+Vercel: project MagerLife → Settings → Git → nối với repo GitHub trên, Production Branch = `main`. PR và nhánh `dev` có bản Preview riêng; biến môi trường cho Preview đặt riêng nếu muốn tách DB.
 
 ## 1. Database
 
@@ -37,7 +45,7 @@ File export database (`*.csv` ở thư mục gốc) chứa dữ liệu thật v�
 
 ## 2. Vercel
 
-Project Vercel được import từ repo GitLab. Cấu hình build nằm trong `vercel.json`, không cần chỉnh trên giao diện:
+Project Vercel nối với repo GitHub (Production Branch = `main`). Cấu hình build nằm trong `vercel.json`, không cần chỉnh trên giao diện:
 
 | Mục | Giá trị |
 | --- | --- |

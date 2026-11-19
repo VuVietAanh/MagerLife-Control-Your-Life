@@ -107,3 +107,4 @@ f2=0
 for n,got,exp in checks2:
     ok = got==exp; f2 += not ok; print(("PASS" if ok else "FAIL"), n, got)
 print("jwt failures:", f2)
+sys.exit(1 if (fail or f2) else 0)

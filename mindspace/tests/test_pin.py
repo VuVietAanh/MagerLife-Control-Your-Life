@@ -97,3 +97,4 @@ for name, got, want in checks:
     ok = got == want; fail += not ok
     print(("PASS " if ok else "FAIL ") + f"{name}: {got}")
 print("failures:", fail)
+sys.exit(1 if fail else 0)

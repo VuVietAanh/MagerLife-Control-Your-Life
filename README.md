@@ -51,7 +51,7 @@ npm run check:deploy   # kiểm tra cấu hình Vercel, schema, .env.example và
 
 ## Deploy
 
-Push lên `main` của GitLab → GitLab CI kiểm tra, Vercel tự build và deploy (build dừng nếu `npm test` fail). Chi tiết, biến môi trường và các bước kiểm tra sau deploy: [docs/deploy.md](docs/deploy.md).
+Nhánh `feature/...` → Pull Request vào `dev` (GitHub Actions chạy test, có người review) → PR từ `dev` vào `main` → Vercel deploy production (build dừng nếu `npm test` fail). Chi tiết, biến môi trường và các bước kiểm tra sau deploy: [docs/deploy.md](docs/deploy.md).
 
 ## Tài liệu khác
 

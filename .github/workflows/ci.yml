@@ -1,0 +1,54 @@
+# CI cho mọi Pull Request vào dev/main và mọi push lên dev/main.
+# Bật "Require status checks to pass" cho hai job dưới đây trong Branch protection của dev và main.
+name: CI
+
+on:
+  pull_request:
+    branches: [dev, main]
+  push:
+    branches: [dev, main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  web:
+    name: web (build, test, check:deploy)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npm test
+      - run: npm run check:deploy
+      - run: node --check src/server/mockApiServer.mjs && node --check src/server/dbRepository.mjs
+
+  mindspace:
+    name: mindspace (Python tests)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mindspace
+    env:
+      PYTHONDONTWRITEBYTECODE: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements.txt
+      # Cùng bộ thư viện với Vercel Function (requirements.txt gốc), thêm httpx cho TestClient
+      - run: pip install -r ../requirements.txt httpx
+      - run: python tests/test_keyword_filter.py
+      - run: python tests/test_auth.py
+      - run: python tests/test_pin.py
+      - run: python tests/test_pipeline_offline.py
