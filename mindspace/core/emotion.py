@@ -25,8 +25,8 @@ PLUTCHIK_EMOTIONS = ["anger", "disgust", "fear", "joy", "sadness", "surprise", "
 NEGATIVE_EMOTIONS = ["anger", "disgust", "fear", "sadness"]
 DOMINANT_MIN      = 0.2   # dưới ngưỡng này coi là trung tính
 
-IntentLabel = Literal["defer", "reject", "venting", "listen_only", "feedback", "continue", "guidance",
-                      "question", "greeting", "closing", "neutral"]
+IntentLabel = Literal["defer", "reject", "venting", "explore", "listen_only", "feedback", "continue", "guidance",
+                      "question", "casual", "greeting", "closing", "neutral"]
 RiskLabel   = Literal["none", "ambiguous", "explicit"]
 
 
@@ -77,10 +77,12 @@ Trả về:
    - reject: muốn dừng cuộc trò chuyện ("thôi khỏi", "không muốn nói nữa"). Chê cách chatbot nói hay phàn nàn chatbot không giống người KHÔNG phải reject: đó là feedback.
    - feedback: chê hoặc góp ý cách chatbot nói ("bạn nói như robot vậy", "sáo quá", "hỏi gì hỏi lắm", "nghe giả trân")
    - venting: đang xả cảm xúc, kể chuyện buồn/bực
+   - explore: chưa gọi tên được mình đang cảm thấy gì, hoặc cảm xúc lẫn lộn, chưa kể chuyện cụ thể ("không rõ lắm", "vừa vui vừa buồn", "cũng chẳng biết nữa", "lấn cấn sao ấy", "kiểu trống trống"). Đã kể rõ chuyện buồn/bực thì là venting.
    - listen_only: nói rõ là chỉ muốn được nghe, không cần khuyên ("mình chỉ muốn có ai nghe thôi", "đừng khuyên gì cả, nghe mình kể thôi")
    - continue: đang kể tiếp, thêm chi tiết, trả lời câu hỏi của chatbot
    - guidance: bế tắc, không biết nên làm gì, hỏi lời khuyên hay góc nhìn ("không biết nên như nào", "mình có nên…", "giờ phải làm sao")
    - question: hỏi chatbot một điều cụ thể (cách làm, thông tin)
+   - casual: nói chuyện thường ngày, không có chuyện gì nặng (kể hôm nay ăn gì, xem phim gì, chuyện vui, hỏi han bâng quơ)
    - greeting: chào hỏi
    - closing: chào tạm biệt, đi ngủ, kết thúc ("thôi mình đi ngủ đây", "cảm ơn nhé, bye")
    - neutral: không rõ

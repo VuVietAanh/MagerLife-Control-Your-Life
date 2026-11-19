@@ -5,7 +5,10 @@ import { getAuthSessionToken } from "./authSessionService";
 // token MindSpace ngắn hạn (POST /mindspace/token phía Node), giữ trong bộ nhớ, và xin lại
 // khi sắp hết hạn hoặc khi MindSpace trả 401.
 
-export type MindspaceResult<T> = { ok: true; data: T } | { ok: false; status: number; message: string };
+export type MindspaceResult<T> = { ok: true; data: T } | { ok: false; status: number; message: string; code?: string; retryAfter?: number };
+
+export type MindspacePinStatus = { has_pin: boolean; locked: boolean; pin_length: number };
+export type MindspaceUnlock = { unlock_token: string; expires_in: number };
 
 export type MindspaceConversation = {
   conversation_id: string;
@@ -57,8 +60,33 @@ async function mindspaceToken(force = false): Promise<string | null> {
   }
 }
 
+// Mã mở khoá PIN: chỉ giữ trong bộ nhớ (không localStorage), nên tải lại trang là phải nhập PIN lại.
+let unlock: { token: string; expiresAtMs: number } | null = null;
+const lockListeners = new Set<(code: string) => void>();
+
+export function setMindspaceUnlock(data: MindspaceUnlock) {
+  unlock = { token: data.unlock_token, expiresAtMs: Date.now() + data.expires_in * 1000 };
+}
+
+export function clearMindspaceUnlock() {
+  unlock = null;
+}
+
+export function isMindspaceUnlocked() {
+  return Boolean(unlock && unlock.expiresAtMs > Date.now());
+}
+
+/** Gọi khi server báo cần PIN (mã mở khoá hết hạn hoặc PIN vừa đổi ở nơi khác). */
+export function onMindspaceLocked(listener: (code: string) => void) {
+  lockListeners.add(listener);
+  return () => {
+    lockListeners.delete(listener);
+  };
+}
+
 export function clearMindspaceToken() {
   cached = null;
+  unlock = null;
 }
 
 async function request<T>(method: string, path: string, body?: unknown): Promise<MindspaceResult<T>> {
@@ -70,7 +98,11 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
     try {
       response = await fetch(url, {
         method,
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+          ...(unlock && unlock.expiresAtMs > Date.now() ? { "X-Mindspace-Unlock": unlock.token } : {}),
+        },
         body: body === undefined ? undefined : JSON.stringify(body),
       });
     } catch {
@@ -79,13 +111,25 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
     if (response.status === 401 && attempt === 0) continue; // token hết hạn: xin token mới, thử lại một lần
     if (!response.ok) {
       let message = `Lỗi ${response.status}`;
+      let code: string | undefined;
+      let retryAfter: number | undefined;
       try {
         const payload = await response.json();
-        if (typeof payload?.detail === "string") message = payload.detail;
+        const detail = payload?.detail;
+        if (typeof detail === "string") message = detail;
+        else if (detail && typeof detail === "object") {
+          if (typeof detail.message === "string") message = detail.message;
+          if (typeof detail.code === "string") code = detail.code;
+          if (typeof detail.retry_after === "number") retryAfter = detail.retry_after;
+        }
       } catch {
         /* giữ thông báo mặc định */
       }
-      return { ok: false, status: response.status, message };
+      if (response.status === 423) {
+        unlock = null;
+        lockListeners.forEach((listener) => listener(code || "PIN_REQUIRED"));
+      }
+      return { ok: false, status: response.status, message, code, retryAfter };
     }
     return { ok: true, data: (await response.json()) as T };
   }
@@ -102,6 +146,10 @@ export const mindspaceApi = {
   rename: (conversationId: string, name: string) => request<unknown>("PUT", `/api/conversation/${encodeURIComponent(conversationId)}/rename`, { name }),
   remove: (conversationId: string) => request<unknown>("DELETE", `/api/conversation/${encodeURIComponent(conversationId)}`),
   backgrounds: () => request<{ images: string[] }>("GET", "/api/backgrounds"),
+  pinStatus: () => request<MindspacePinStatus>("GET", "/api/pin/status"),
+  setPin: (pin: string, currentPin?: string) =>
+    request<MindspaceUnlock>("POST", "/api/pin/set", currentPin ? { pin, current_pin: currentPin } : { pin }),
+  verifyPin: (pin: string) => request<MindspaceUnlock>("POST", "/api/pin/verify", { pin }),
 };
 
 export function mindspaceBackgroundUrl(name: string) {

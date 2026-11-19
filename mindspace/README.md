@@ -22,6 +22,7 @@ tin nhắn
 
 - Cách nói chuyện: **nghe trước, rồi mới thật lòng**. Lúc đầu phản chiếu và hỏi để hiểu; khi đã hiểu hoặc khi người dùng bế tắc / hỏi nên làm gì (intent `guidance`) thì nói góc nhìn, được nhẹ nhàng không đồng ý khi họ tự hạ thấp mình, gợi 1–2 việc nhỏ cụ thể, khoảng 120 chữ. Không bắt buộc kết bằng câu hỏi; tạm biệt hoặc vừa ra quyết định thì không hỏi thêm.
 - Bị chê cách nói (intent `feedback`: "nói như robot") thì không phải muốn dừng. Bot nhận ngắn rồi đổi giọng.
+- Chưa rõ hoặc lẫn lộn cảm xúc (intent `explore`: "không rõ lắm, có chút vui có chút buồn"): không vội hỏi nguyên nhân, cho họ thấy chưa gọi tên được cũng không sao, tối đa một câu hỏi và có thể không hỏi. Trò chuyện bình thường (intent `casual`): đáp như bạn bè, không xoáy vào cảm xúc.
 - Người dùng bảo "đừng hỏi thêm" thì cả cuộc trò chuyện không hỏi nữa, trừ câu hỏi an toàn. Phát hiện bằng regex trên các tin của cuộc đó.
 - Bot không tự nhận là chỗ dựa ("mình ở đây") với người đang cô đơn. Khi để cửa mở, người thật được nhắc trước, bot sau.
 - Đã có tín hiệu mơ hồ, cộng với tình trạng kéo dài nhiều tuần hoặc nhiều tháng: bot gợi một lần việc gặp chuyên gia trước khi cuộc trò chuyện kết thúc. Luật này nằm trong prompt, chưa có code đếm.
@@ -139,6 +140,21 @@ Frontend gọi MindSpace với JWT đó ──► app.py kiểm tra chữ ký, i
 - Role (`admin`/`user`) lấy theo `MAGERLIFE_ADMIN_EMAILS` phía MagerLife, cập nhật vào DB MindSpace ở mỗi request.
 - Admin MindSpace vẫn khóa được user (`is_active`), có hiệu lực ngay dù token còn hạn.
 - Token hết hạn thì MindSpace trả 401, frontend xin token mới.
+
+## Mã PIN của tab "Tâm sự"
+
+Tab Tâm sự khoá bằng mã PIN 8 số, kiểm tra ở server (`core/pin.py`, bảng `user_pins` tự tạo ở lần chạy đầu).
+
+- **Chỉ lưu bản băm**: scrypt (n=2^15, r=8, p=1) với salt ngẫu nhiên 16 byte cho mỗi mã. Không lưu, không log mã thô.
+- **Mở khoá**: nhập đúng PIN → mã mở khoá (JWT, hạn 30 phút) gửi qua header `X-Mindspace-Unlock`. Mọi endpoint hội thoại và admin trả 423 nếu thiếu hoặc sai; `/api/auth/me`, `/api/pin/*`, `/api/backgrounds`, `/health` không cần. Chưa đặt PIN thì cũng bị chặn (423 `PIN_NOT_SET`), nên không có đường đọc hội thoại mà bỏ qua PIN.
+- **Chống dò**: sai 5 lần liên tiếp → khoá 15 phút (429 `PIN_LOCKED`). Không nhận mã toàn một số hay dãy liên tiếp (12345678, 98765432).
+- **Đổi PIN**: cần mã hiện tại; đổi xong mọi mã mở khoá cũ hết hiệu lực.
+- **Phía trình duyệt**: mã mở khoá chỉ nằm trong bộ nhớ. Rời tab, tải lại trang hoặc hết 30 phút là phải nhập lại; có nút khoá ngay trên thanh tiêu đề.
+- **Quên PIN**: không có đường đặt lại trong app (để người cầm phiên MagerLife đang mở cũng không mở được). Chủ DB xoá dòng của mình trong Neon rồi đặt mã mới ở lần mở tiếp theo:
+  ```sql
+  delete from user_pins where user_id = (select user_id from users where email = '<email của bạn>');
+  ```
+- Giới hạn: PIN 8 số chỉ có 10^8 khả năng. Nếu lộ cả DB, người có bản băm vẫn dò được bằng máy mạnh dù scrypt làm chậm; bảo vệ chính vẫn là giữ kín DB và `MINDSPACE_SHARED_SECRET`.
 
 ## Deploy
 

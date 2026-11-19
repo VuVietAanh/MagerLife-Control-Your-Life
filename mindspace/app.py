@@ -5,7 +5,7 @@
 
 import os
 import secrets
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, Header, HTTPException
@@ -26,7 +26,7 @@ app.add_middleware(
     allow_origins=_CORS_ORIGINS,
     allow_credentials=False,
     allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH"],
-    allow_headers=["Authorization", "Content-Type"],
+    allow_headers=["Authorization", "Content-Type", "X-Mindspace-Unlock"],
 )
 
 
@@ -107,6 +107,110 @@ def _require_self(token_user_id: str, claimed_user_id: str | None):
     """Body/path user_id phải trùng với user của token."""
     if claimed_user_id and claimed_user_id != token_user_id:
         raise HTTPException(status_code=403, detail="Forbidden")
+
+# ── PIN khoá tab "Tâm sự" (core/pin.py) ────────────────────
+# Mọi endpoint đọc/ghi hội thoại đòi header X-Mindspace-Unlock: mã mở khoá cấp sau khi nhập
+# đúng PIN. Chưa đặt PIN thì phải đặt trước, nên không có đường nào đọc hội thoại mà bỏ qua PIN.
+from core import pin as pin_lib
+
+
+def _pin_error(status: int, code: str, message: str, **extra):
+    raise HTTPException(status_code=status, detail={"code": code, "message": message, **extra})
+
+
+def _get_pin(db: Session, user_id: str):
+    from db.models import UserPin
+    return db.query(UserPin).filter(UserPin.user_id == user_id).first()
+
+
+def _check_pin_attempt(db: Session, record, pin: str) -> None:
+    """Kiểm tra PIN, đếm lần sai và khoá tạm. Raise nếu sai hoặc đang bị khoá."""
+    now = datetime.utcnow()
+    if record.locked_until and record.locked_until > now:
+        retry = int((record.locked_until - now).total_seconds()) + 1
+        _pin_error(429, "PIN_LOCKED", f"Nhập sai quá nhiều lần. Thử lại sau {max(1, retry // 60)} phút.",
+                   retry_after=retry)
+    if pin_lib.verify_pin(pin or "", record.pin_hash):
+        record.failed_attempts, record.locked_until = 0, None
+        db.commit()
+        return
+    record.failed_attempts = (record.failed_attempts or 0) + 1
+    if record.failed_attempts >= pin_lib.MAX_FAILED:
+        record.failed_attempts = 0
+        record.locked_until = now + timedelta(minutes=pin_lib.LOCK_MINUTES)
+        db.commit()
+        _pin_error(429, "PIN_LOCKED", f"Nhập sai {pin_lib.MAX_FAILED} lần. Tâm sự bị khoá {pin_lib.LOCK_MINUTES} phút.",
+                   retry_after=pin_lib.LOCK_MINUTES * 60)
+    db.commit()
+    left = pin_lib.MAX_FAILED - record.failed_attempts
+    _pin_error(403, "PIN_INCORRECT", f"Mã không đúng. Còn {left} lần thử.", attempts_left=left)
+
+
+def _unlock_response(record) -> dict:
+    token, ttl = pin_lib.make_unlock_token(_SHARED_SECRET, record.user_id, pin_lib.pin_version(record.updated_at))
+    return {"unlock_token": token, "expires_in": ttl}
+
+
+def get_unlocked_user(auth_uid: str = Depends(get_current_user),
+                      x_mindspace_unlock: str = Header(None),
+                      db: Session = Depends(get_db)):
+    record = _get_pin(db, auth_uid)
+    if not record:
+        _pin_error(423, "PIN_NOT_SET", "Cần đặt mã PIN trước khi dùng Tâm sự.")
+    if not pin_lib.check_unlock_token(_SHARED_SECRET, x_mindspace_unlock, auth_uid,
+                                      pin_lib.pin_version(record.updated_at)):
+        _pin_error(423, "PIN_REQUIRED", "Nhập mã PIN để mở Tâm sự.")
+    return auth_uid
+
+
+class SetPinRequest(BaseModel):
+    pin: str
+    current_pin: str | None = None
+
+
+class VerifyPinRequest(BaseModel):
+    pin: str
+
+
+@app.get("/api/pin/status")
+def pin_status(auth_uid: str = Depends(get_current_user), db: Session = Depends(get_db)):
+    record = _get_pin(db, auth_uid)
+    locked = bool(record and record.locked_until and record.locked_until > datetime.utcnow())
+    return {"has_pin": record is not None, "locked": locked, "pin_length": pin_lib.PIN_LENGTH}
+
+
+@app.post("/api/pin/set")
+def pin_set(req: SetPinRequest, auth_uid: str = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Đặt PIN lần đầu, hoặc đổi PIN (phải kèm PIN hiện tại)."""
+    from db.models import UserPin
+    problem = pin_lib.pin_problem(req.pin)
+    if problem:
+        _pin_error(400, "PIN_INVALID", problem)
+    record = _get_pin(db, auth_uid)
+    if record:
+        _check_pin_attempt(db, record, req.current_pin or "")
+        record.pin_hash = pin_lib.hash_pin(req.pin)
+    else:
+        record = UserPin(user_id=auth_uid, pin_hash=pin_lib.hash_pin(req.pin), failed_attempts=0)
+        db.add(record)
+    record.updated_at = datetime.utcnow()
+    try:
+        db.commit()
+    except IntegrityError:          # hai lần đặt PIN đầu tiên chạy song song
+        db.rollback()
+        _pin_error(409, "PIN_ALREADY_SET", "Mã PIN vừa được đặt ở nơi khác. Tải lại trang.")
+    db.refresh(record)
+    return _unlock_response(record)
+
+
+@app.post("/api/pin/verify")
+def pin_verify(req: VerifyPinRequest, auth_uid: str = Depends(get_current_user), db: Session = Depends(get_db)):
+    record = _get_pin(db, auth_uid)
+    if not record:
+        _pin_error(423, "PIN_NOT_SET", "Cần đặt mã PIN trước khi dùng Tâm sự.")
+    _check_pin_attempt(db, record, req.pin)
+    return _unlock_response(record)
+
 
 def _returning_prompt(db: Session, prev) -> str:
     """Lời mời nói tiếp khi người dùng mở cuộc trò chuyện mới.
@@ -228,7 +332,7 @@ def backgrounds():
 # ============================================================
 
 @app.post("/api/chat")
-def chat(req: ChatRequest, auth_uid: str = Depends(get_current_user),
+def chat(req: ChatRequest, auth_uid: str = Depends(get_unlocked_user),
          db: Session = Depends(get_db)):
     from db.crud import update_conversation_emotion
     _require_self(auth_uid, req.user_id)
@@ -274,7 +378,7 @@ def _latest_empty_conversation(db: Session, user_id: str):
 
 
 @app.post("/api/conversation/new")
-def new_conversation(req: NewConvRequest, auth_uid: str = Depends(get_current_user),
+def new_conversation(req: NewConvRequest, auth_uid: str = Depends(get_unlocked_user),
                      db: Session = Depends(get_db)):
     from db.crud import create_conversation, get_recent_conversations, purge_expired_conversations
     _require_self(auth_uid, req.user_id)
@@ -304,7 +408,7 @@ def new_conversation(req: NewConvRequest, auth_uid: str = Depends(get_current_us
 
 
 @app.get("/api/conversations/{user_id}")
-def get_conversations(user_id: str, auth_uid: str = Depends(get_current_user),
+def get_conversations(user_id: str, auth_uid: str = Depends(get_unlocked_user),
                       db: Session = Depends(get_db)):
     from sqlalchemy import func
 
@@ -332,7 +436,7 @@ def get_conversations(user_id: str, auth_uid: str = Depends(get_current_user),
 
 
 @app.get("/api/conversation/{conversation_id}/messages")
-def get_messages(conversation_id: str, auth_uid: str = Depends(get_current_user),
+def get_messages(conversation_id: str, auth_uid: str = Depends(get_unlocked_user),
                  db: Session = Depends(get_db)):
     from db.crud import get_recent_messages
     _require_conversation(db, conversation_id, auth_uid, allow_admin=True)
@@ -350,7 +454,7 @@ def get_messages(conversation_id: str, auth_uid: str = Depends(get_current_user)
 
 @app.put("/api/conversation/{conversation_id}/rename")
 def rename_conversation(conversation_id: str, req: RenameRequest,
-                        auth_uid: str = Depends(get_current_user),
+                        auth_uid: str = Depends(get_unlocked_user),
                         db: Session = Depends(get_db)):
     conv = _require_conversation(db, conversation_id, auth_uid)
     conv.name_conversation = req.name[:80]
@@ -359,7 +463,7 @@ def rename_conversation(conversation_id: str, req: RenameRequest,
 
 
 @app.delete("/api/conversation/{conversation_id}")
-def delete_conversation(conversation_id: str, auth_uid: str = Depends(get_current_user),
+def delete_conversation(conversation_id: str, auth_uid: str = Depends(get_unlocked_user),
                         db: Session = Depends(get_db)):
     from db.crud import delete_conversation as _delete
     _require_conversation(db, conversation_id, auth_uid)
@@ -370,7 +474,7 @@ def delete_conversation(conversation_id: str, auth_uid: str = Depends(get_curren
 
 
 @app.post("/api/conversation/carry-over")
-def carry_over(req: CarryOverRequest, auth_uid: str = Depends(get_current_user),
+def carry_over(req: CarryOverRequest, auth_uid: str = Depends(get_unlocked_user),
                db: Session = Depends(get_db)):
     from db.crud import carry_over_emotion_from_conversation
     _require_self(auth_uid, req.user_id)
@@ -380,7 +484,7 @@ def carry_over(req: CarryOverRequest, auth_uid: str = Depends(get_current_user),
 
 
 @app.post("/api/end/{conversation_id}")
-def end_session(conversation_id: str, auth_uid: str = Depends(get_current_user),
+def end_session(conversation_id: str, auth_uid: str = Depends(get_unlocked_user),
                 db: Session = Depends(get_db)):
     _require_conversation(db, conversation_id, auth_uid)
     _pipeline.end_session(conversation_id)
@@ -393,7 +497,7 @@ def end_session(conversation_id: str, auth_uid: str = Depends(get_current_user),
 # ============================================================
 
 @app.get("/api/emotion/conversation/{conversation_id}")
-def emotion_conversation(conversation_id: str, auth_uid: str = Depends(get_current_user),
+def emotion_conversation(conversation_id: str, auth_uid: str = Depends(get_unlocked_user),
                          db: Session = Depends(get_db)):
     from db.crud import get_conversation_emotion
     _require_conversation(db, conversation_id, auth_uid, allow_admin=True)
@@ -412,7 +516,7 @@ def emotion_conversation(conversation_id: str, auth_uid: str = Depends(get_curre
 # ADMIN ROUTES
 # ============================================================
 
-def require_admin(user_id: str = Depends(get_current_user),
+def require_admin(user_id: str = Depends(get_unlocked_user),
                   db: Session = Depends(get_db)):
     from db.crud import get_user
     user = get_user(db, user_id)
