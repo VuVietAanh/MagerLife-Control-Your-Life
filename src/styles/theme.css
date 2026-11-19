@@ -179,3 +179,28 @@
     line-height: 1.5;
   }
 }
+
+/* MindSpace: ba chấm "đang trả lời" nhảy lần lượt */
+.ms-typing {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 10px;
+}
+.ms-typing > span {
+  width: 7px;
+  height: 7px;
+  border-radius: 9999px;
+  background: #94a3b8;
+  animation: ms-typing-bounce 1.2s ease-in-out infinite;
+}
+.ms-typing > span:nth-child(2) { animation-delay: 0.15s; }
+.ms-typing > span:nth-child(3) { animation-delay: 0.3s; }
+@keyframes ms-typing-bounce {
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.45; }
+  30% { transform: translateY(-5px); opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ms-typing > span { animation: ms-typing-fade 1.2s ease-in-out infinite; }
+  @keyframes ms-typing-fade { 0%, 100% { opacity: 0.45; } 50% { opacity: 1; } }
+}

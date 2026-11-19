@@ -313,8 +313,12 @@ export function MindspaceView() {
             ))}
             {sending && (
               <div className="flex justify-start">
-                <div className="rounded-lg border border-white/80 bg-white/90 px-3 py-2 text-sm text-slate-400">
-                  <span className="animate-pulse">● ● ●</span>
+                <div className="rounded-lg border border-white/80 bg-white/90 px-3.5 py-3" role="status" aria-label="MindSpace đang trả lời">
+                  <span className="ms-typing" aria-hidden="true">
+                    <span />
+                    <span />
+                    <span />
+                  </span>
                 </div>
               </div>
             )}
