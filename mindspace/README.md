@@ -43,7 +43,7 @@ tin nhắn
 | Số | Giờ | Nguồn, ngày kiểm tra |
 | --- | --- | --- |
 | Ngày Mai 096 306 1414 (khủng hoảng tâm lý, trầm cảm) | 13:00–20:30, thứ Tư → Chủ nhật | [duongdaynongngaymai.vn](https://duongdaynongngaymai.vn), 02/11/2026 |
-| 111 Tổng đài quốc gia bảo vệ trẻ em | 24/7, miễn phí | theo kết quả tìm kiếm 02/11/2026, chưa mở trang chính thức |
+| 111 Tổng đài quốc gia bảo vệ trẻ em (người dưới 16 tuổi, hoặc đang bị bạo lực/xâm hại) | 24/7, miễn phí | 24/7: [báo cáo năm 2025 trên tongdai111.vn](https://tongdai111.vn/uploads/files/B%C3%A1o%20c%C3%A1o%20T%E1%BB%95ng%20%C4%91%C3%A0i%20BVTE%20111%20%20n%C4%83m%202025.pdf) (Cục Bà mẹ và Trẻ em, Bộ Y tế); miễn phí: [công văn 2477/LĐTBXH-TE](https://luatvietnam.vn/tin-van-ban-moi/111-la-so-tong-dai-quoc-gia-bao-ve-tre-em-186-16851-article.html). Kiểm tra 19/11/2026 |
 | 115 Cấp cứu | 24/7 | |
 
 Số và giờ có thể đổi: kiểm tra lại định kỳ. Chưa tìm được đường dây tâm lý nào chắc chắn chạy 24/7, nên ngoài giờ bot hướng tới người tin cậy ở gần hoặc 115. Ứng viên: 1900 1267 (Bệnh viện Tâm thần TP.HCM, mô hình "cấp cứu trầm cảm" phối hợp 115). Theo [VnExpress 22/07/2022](https://vnexpress.net/cap-cuu-tram-cam-o-tp-hcm-4490877.html) đây là thử nghiệm ở TP.HCM, và chỉ [một bài 2025](https://alobacsi.com/hotline-cap-cuu-tram-cam-hoat-dong-24-7-mot-cuoc-goi-co-the-cuu-mot-mang-nguoi.html) ghi là 24/7. Đầu số 1900 có tính phí. Chưa đưa vào prompt; cần gọi thử để xác nhận.
