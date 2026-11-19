@@ -18,3 +18,14 @@ def mint(email: str, role: str = "user", *, aud: str = "mindspace", iss: str = "
 
 def auth_header(email: str, role: str = "user") -> dict:
     return {"Authorization": "Bearer " + mint(email, role)}
+
+
+TEST_PIN = "27183946"
+
+
+def unlocked(client, header: dict, pin: str = TEST_PIN) -> dict:
+    """Header kèm mã mở khoá Tâm sự: đặt PIN nếu chưa có, rồi nhập PIN."""
+    has_pin = client.get("/api/pin/status", headers=header).json()["has_pin"]
+    r = client.post("/api/pin/verify" if has_pin else "/api/pin/set", json={"pin": pin}, headers=header)
+    r.raise_for_status()
+    return {**header, "X-Mindspace-Unlock": r.json()["unlock_token"]}

@@ -47,6 +47,19 @@ class User(Base):
 
 
 # ============================================================
+# PIN KHOÁ TAB "TÂM SỰ" (core/pin.py) — chỉ lưu bản băm scrypt
+# ============================================================
+class UserPin(Base):
+    __tablename__ = "user_pins"
+
+    user_id         = Column(String, ForeignKey("users.user_id"), primary_key=True)
+    pin_hash        = Column(String, nullable=False)
+    failed_attempts = Column(Integer, nullable=False, default=0)
+    locked_until    = Column(DateTime, nullable=True)
+    updated_at      = Column(DateTime, nullable=False)
+
+
+# ============================================================
 # CONVERSATIONS
 # ============================================================
 class Conversation(Base):

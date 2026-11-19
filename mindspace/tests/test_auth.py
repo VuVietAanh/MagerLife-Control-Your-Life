@@ -4,7 +4,7 @@ sys.path.insert(0, os.getcwd())
 sys.path.insert(0, os.path.join(os.getcwd(), "tests"))
 os.environ["DATABASE_URL"] = "sqlite://"
 os.environ["MINDSPACE_CORS_ORIGINS"] = "https://magerlife.test"
-from _tokens import TEST_SECRET, auth_header, mint
+from _tokens import TEST_SECRET, auth_header, mint, unlocked
 from db.models import init_db
 from sqlalchemy.pool import StaticPool
 from sqlalchemy import create_engine
@@ -32,7 +32,7 @@ def reg(email):
     # Lần đầu gọi với token MagerLife hợp lệ thì MindSpace tự tạo user theo email
     h = auth_header(email)
     r = c.get("/api/auth/me", headers=h); r.raise_for_status()
-    return r.json()["user_id"], h
+    return r.json()["user_id"], unlocked(c, h)
 a_id,a_h = reg("a@test.com"); b_id,b_h = reg("b@test.com")
 conv = c.post("/api/conversation/new", json={"user_id":a_id}, headers=a_h).json()["conversation_id"]
 checks = [
@@ -58,7 +58,7 @@ checks = [
 ]
 # admin may read
 from db.crud import get_user_by_email
-b_h = auth_header("b@test.com", role="admin")   # role lấy từ token MagerLife
+b_h = unlocked(c, auth_header("b@test.com", role="admin"))   # role lấy từ token MagerLife
 checks.append(("admin reads messages", c.get(f"/api/conversation/{conv}/messages", headers=b_h).status_code, 200))
 checks.append(("admin cannot delete",  c.delete(f"/api/conversation/{conv}", headers=b_h).status_code, 404))
 lst = c.get(f"/api/conversations/{a_id}", headers=a_h)

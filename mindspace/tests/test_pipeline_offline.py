@@ -61,7 +61,7 @@ class FakeClient:
 fake = FakeClient()
 llm._client = fake
 
-from _tokens import auth_header  # noqa: E402  (đặt MINDSPACE_SHARED_SECRET trước khi import app)
+from _tokens import auth_header, unlocked  # noqa: E402  (đặt MINDSPACE_SHARED_SECRET trước khi import app)
 import app as A  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
@@ -74,7 +74,7 @@ s = A._Session()
 u = create_user(s, name="WoA", email="woa@test.local")
 uid = u.user_id
 s.close()
-h = auth_header("woa@test.local")
+h = unlocked(c, auth_header("woa@test.local"))
 
 
 def analysis(intent="continue", self_harm="none", **emo):

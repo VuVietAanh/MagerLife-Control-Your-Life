@@ -141,6 +141,21 @@ Frontend gọi MindSpace với JWT đó ──► app.py kiểm tra chữ ký, i
 - Admin MindSpace vẫn khóa được user (`is_active`), có hiệu lực ngay dù token còn hạn.
 - Token hết hạn thì MindSpace trả 401, frontend xin token mới.
 
+## Mã PIN của tab "Tâm sự"
+
+Tab Tâm sự khoá bằng mã PIN 8 số, kiểm tra ở server (`core/pin.py`, bảng `user_pins` tự tạo ở lần chạy đầu).
+
+- **Chỉ lưu bản băm**: scrypt (n=2^15, r=8, p=1) với salt ngẫu nhiên 16 byte cho mỗi mã. Không lưu, không log mã thô.
+- **Mở khoá**: nhập đúng PIN → mã mở khoá (JWT, hạn 30 phút) gửi qua header `X-Mindspace-Unlock`. Mọi endpoint hội thoại và admin trả 423 nếu thiếu hoặc sai; `/api/auth/me`, `/api/pin/*`, `/api/backgrounds`, `/health` không cần. Chưa đặt PIN thì cũng bị chặn (423 `PIN_NOT_SET`), nên không có đường đọc hội thoại mà bỏ qua PIN.
+- **Chống dò**: sai 5 lần liên tiếp → khoá 15 phút (429 `PIN_LOCKED`). Không nhận mã toàn một số hay dãy liên tiếp (12345678, 98765432).
+- **Đổi PIN**: cần mã hiện tại; đổi xong mọi mã mở khoá cũ hết hiệu lực.
+- **Phía trình duyệt**: mã mở khoá chỉ nằm trong bộ nhớ. Rời tab, tải lại trang hoặc hết 30 phút là phải nhập lại; có nút khoá ngay trên thanh tiêu đề.
+- **Quên PIN**: không có đường đặt lại trong app (để người cầm phiên MagerLife đang mở cũng không mở được). Chủ DB xoá dòng của mình trong Neon rồi đặt mã mới ở lần mở tiếp theo:
+  ```sql
+  delete from user_pins where user_id = (select user_id from users where email = '<email của bạn>');
+  ```
+- Giới hạn: PIN 8 số chỉ có 10^8 khả năng. Nếu lộ cả DB, người có bản băm vẫn dò được bằng máy mạnh dù scrypt làm chậm; bảo vệ chính vẫn là giữ kín DB và `MINDSPACE_SHARED_SECRET`.
+
 ## Deploy
 
 Chạy chung project Vercel với MagerLife: `api/mindspace.py` (thư mục gốc repo) nạp `app` trong file này và cắt tiền tố `/mindspace`, nên route ở đây giữ nguyên dạng `/api/...`. Biến môi trường cần đặt trên project MagerLife: `MINDSPACE_DATABASE_URL` (Neon riêng của MindSpace; ưu tiên hơn `DATABASE_URL`), `ANTHROPIC_API_KEY`, `MINDSPACE_SHARED_SECRET`. Chi tiết ở `docs/deploy.md` của MagerLife.

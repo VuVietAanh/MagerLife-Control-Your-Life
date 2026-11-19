@@ -1,12 +1,16 @@
-import { Image as ImageIcon, List, Phone, Send, Trash2, X } from "lucide-react";
+import { Image as ImageIcon, KeyRound, List, Lock, Phone, Send, Trash2, X } from "lucide-react";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
+  clearMindspaceUnlock,
+  isMindspaceUnlocked,
   mindspaceApi,
   mindspaceBackgroundUrl,
+  onMindspaceLocked,
   type MindspaceConversation,
 } from "../../services/mindspaceClient";
 import { Glass } from "../../ui/primitives";
 import { ConversationList, conversationTitle } from "./ConversationList";
+import { ChangePinDialog, PinGate } from "./PinGate";
 
 type ChatMessage = { role: "user" | "bot"; content: string; timestamp: string | null; crisis?: boolean };
 
@@ -57,7 +61,51 @@ function HotlineCard() {
   );
 }
 
+/** Tab "Tâm sự": khoá bằng PIN 8 số. Rời tab, tải lại trang hay hết 30 phút là phải nhập lại. */
 export function MindspaceView() {
+  const [unlocked, setUnlocked] = useState(isMindspaceUnlocked);
+  const [notice, setNotice] = useState("");
+
+  useEffect(
+    () =>
+      onMindspaceLocked((code) => {
+        setUnlocked(false);
+        setNotice(code === "PIN_REQUIRED" ? "Phiên mở khoá đã hết hạn hoặc mã vừa được đổi. Nhập lại mã nhé." : "");
+      }),
+    []
+  );
+  // Rời tab Tâm sự là khoá lại
+  useEffect(() => () => clearMindspaceUnlock(), []);
+
+  if (!unlocked) {
+    return (
+      <main className="p-4">
+        <Glass className="relative h-[calc(100vh-7.5rem)] min-h-[480px] overflow-hidden">
+          <PinGate
+            notice={notice}
+            onUnlocked={() => {
+              setNotice("");
+              setUnlocked(true);
+            }}
+          />
+        </Glass>
+      </main>
+    );
+  }
+  return (
+    <MindspaceChat
+      onLock={() => {
+        clearMindspaceUnlock();
+        setNotice("");
+        setUnlocked(false);
+      }}
+    />
+  );
+}
+
+function MindspaceChat({ onLock }: { onLock: () => void }) {
+  const [showChangePin, setShowChangePin] = useState(false);
+  const [pinChanged, setPinChanged] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
   const [conversations, setConversations] = useState<MindspaceConversation[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -245,9 +293,18 @@ export function MindspaceView() {
               </button>
               <p className="text-sm font-bold text-slate-900">Tâm sự</p>
             </div>
-            <button type="button" onClick={() => setShowBackgrounds((v) => !v)} className="rounded-lg p-1.5 text-slate-600 hover:bg-white" title="Đổi ảnh nền">
-              <ImageIcon className="h-4 w-4" />
-            </button>
+            <div className="flex items-center gap-1">
+              {pinChanged && <span className="mr-1 text-xs font-semibold text-emerald-700">Đã đổi mã PIN</span>}
+              <button type="button" onClick={() => setShowBackgrounds((v) => !v)} className="rounded-lg p-1.5 text-slate-600 hover:bg-white" title="Đổi ảnh nền">
+                <ImageIcon className="h-4 w-4" />
+              </button>
+              <button type="button" onClick={() => setShowChangePin(true)} className="rounded-lg p-1.5 text-slate-600 hover:bg-white" title="Đổi mã PIN">
+                <KeyRound className="h-4 w-4" />
+              </button>
+              <button type="button" onClick={onLock} className="rounded-lg p-1.5 text-slate-600 hover:bg-white" title="Khoá Tâm sự">
+                <Lock className="h-4 w-4" />
+              </button>
+            </div>
           </div>
 
           {showBackgrounds && (
@@ -361,6 +418,14 @@ export function MindspaceView() {
         </section>
       </Glass>
 
+      {showChangePin && (
+        <ChangePinDialog
+          onClose={(changed) => {
+            setShowChangePin(false);
+            if (changed) setPinChanged(true);
+          }}
+        />
+      )}
       {pendingDelete && (
         <div
           className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/30 p-4 backdrop-blur-sm"
