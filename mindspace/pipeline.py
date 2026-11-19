@@ -73,16 +73,17 @@ def resolve_database_url() -> str:
 
     MINDSPACE_DATABASE_URL trước: khi chạy chung project Vercel với MagerLife, DATABASE_URL
     là DB của MagerLife, nên trên Vercel bắt buộc phải có MINDSPACE_DATABASE_URL.
-    Driver cài sẵn là psycopg2, nên postgres:// và postgresql+psycopg:// được đổi về postgresql://.
+    Driver cài sẵn là psycopg2, nên mọi dạng postgres://, postgresql://, postgresql+psycopg:// đều
+    được ghi rõ thành postgresql+psycopg2:// (SQLAlchemy mới có thể chọn psycopg 3 làm mặc định).
     """
     url = os.getenv("MINDSPACE_DATABASE_URL")
     if not url:
         if os.getenv("VERCEL"):
             raise RuntimeError("MINDSPACE_DATABASE_URL chưa được đặt trên Vercel; không dùng DATABASE_URL (DB của MagerLife).")
         url = os.getenv("DATABASE_URL", "sqlite:///chatbot.db")
-    for prefix in ("postgres://", "postgresql+psycopg://", "postgresql+psycopg2://"):
+    for prefix in ("postgres://", "postgresql://", "postgresql+psycopg://", "postgresql+psycopg2://"):
         if url.startswith(prefix):
-            return "postgresql://" + url[len(prefix):]
+            return "postgresql+psycopg2://" + url[len(prefix):]
     return url
 
 
