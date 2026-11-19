@@ -68,11 +68,28 @@ def local_time_vn(now: datetime | None = None) -> str:
     return f"{_WEEKDAY[now.weekday()]} {now:%H:%M}"
 
 
+def resolve_database_url() -> str:
+    """Chọn chuỗi kết nối DB cho MindSpace.
+
+    MINDSPACE_DATABASE_URL trước: khi chạy chung project Vercel với MagerLife, DATABASE_URL
+    là DB của MagerLife, nên trên Vercel bắt buộc phải có MINDSPACE_DATABASE_URL.
+    Driver cài sẵn là psycopg2, nên postgres:// và postgresql+psycopg:// được đổi về postgresql://.
+    """
+    url = os.getenv("MINDSPACE_DATABASE_URL")
+    if not url:
+        if os.getenv("VERCEL"):
+            raise RuntimeError("MINDSPACE_DATABASE_URL chưa được đặt trên Vercel; không dùng DATABASE_URL (DB của MagerLife).")
+        url = os.getenv("DATABASE_URL", "sqlite:///chatbot.db")
+    for prefix in ("postgres://", "postgresql+psycopg://", "postgresql+psycopg2://"):
+        if url.startswith(prefix):
+            return "postgresql://" + url[len(prefix):]
+    return url
+
+
 class ChatbotPipeline:
 
     def __init__(self, db_url: str = None):
-        # MINDSPACE_DATABASE_URL trước: khi chạy chung project Vercel với MagerLife, DATABASE_URL là DB của MagerLife.
-        db_url = db_url or os.getenv("MINDSPACE_DATABASE_URL") or os.getenv("DATABASE_URL", "sqlite:///chatbot.db")
+        db_url = db_url or resolve_database_url()
         self._engine = init_db(db_url)
 
         from sqlalchemy.orm import sessionmaker
