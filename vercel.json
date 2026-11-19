@@ -4,6 +4,10 @@
   "framework": "vite",
   "routes": [
     {
+      "src": "/mindspace/(.*)",
+      "dest": "/api/mindspace.py"
+    },
+    {
       "src": "/api/(.*)",
       "dest": "/api/[...path].js"
     },
@@ -14,5 +18,11 @@
       "src": "/(.*)",
       "dest": "/index.html"
     }
-  ]
+  ],
+  "functions": {
+    "api/mindspace.py": {
+      "maxDuration": 60,
+      "excludeFiles": "{node_modules/**,dist/**,src/**,public/**,docs/**,tests/**,scripts/**,agent_training/**,Picture/**,mindspace/tests/**,mindspace/venv/**,mindspace/data/**,mindspace/static/**,mindspace/hf_space/**,mindspace/docs/**,mindspace/*.md}"
+    }
+  }
 }

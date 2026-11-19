@@ -71,7 +71,8 @@ def local_time_vn(now: datetime | None = None) -> str:
 class ChatbotPipeline:
 
     def __init__(self, db_url: str = None):
-        db_url = db_url or os.getenv("DATABASE_URL", "sqlite:///chatbot.db")
+        # MINDSPACE_DATABASE_URL trước: khi chạy chung project Vercel với MagerLife, DATABASE_URL là DB của MagerLife.
+        db_url = db_url or os.getenv("MINDSPACE_DATABASE_URL") or os.getenv("DATABASE_URL", "sqlite:///chatbot.db")
         self._engine = init_db(db_url)
 
         from sqlalchemy.orm import sessionmaker

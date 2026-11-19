@@ -1,0 +1,11 @@
+# Thư viện Python cho Vercel Function api/mindspace.py (tab "Tâm sự").
+# Frontend và API Node của MagerLife không dùng file này.
+# RAG tắt trên production (MINDSPACE_RAG), nên không cần faiss/numpy/pypdf;
+# chạy MindSpace đầy đủ ở máy thì dùng mindspace/requirements.txt.
+fastapi>=0.110.0
+pydantic>=2.0.0
+PyJWT>=2.8.0
+anthropic>=2.3.0
+sqlalchemy>=2.0.0
+psycopg2-binary>=2.9.9
+python-dotenv>=1.0.0

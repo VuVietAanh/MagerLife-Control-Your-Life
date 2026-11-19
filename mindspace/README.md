@@ -140,9 +140,11 @@ Frontend gọi MindSpace với JWT đó ──► app.py kiểm tra chữ ký, i
 - Admin MindSpace vẫn khóa được user (`is_active`), có hiệu lực ngay dù token còn hạn.
 - Token hết hạn thì MindSpace trả 401, frontend xin token mới.
 
-## Deploy (chưa làm)
+## Deploy
 
-Dự kiến: một project Vercel riêng trỏ vào repo GitLab MagerLife với Root Directory = `mindspace/`, độc lập với project Vercel của MagerLife. Cần kiểm tra lại tài liệu Vercel về monorepo trước khi làm. Project Vercel MindSpace hiện tại vẫn deploy từ repo GitHub cũ.
+Chạy chung project Vercel với MagerLife: `api/mindspace.py` (thư mục gốc repo) nạp `app` trong file này và cắt tiền tố `/mindspace`, nên route ở đây giữ nguyên dạng `/api/...`. Biến môi trường cần đặt trên project MagerLife: `MINDSPACE_DATABASE_URL` (Neon riêng của MindSpace; ưu tiên hơn `DATABASE_URL`), `ANTHROPIC_API_KEY`, `MINDSPACE_SHARED_SECRET`. Chi tiết ở `docs/deploy.md` của MagerLife.
+
+Production không bật RAG, và `static/backgrounds/` không có trong git nên `/api/backgrounds` trả danh sách rỗng. Project Vercel MindSpace cũ (deploy từ repo GitHub) không còn cần nữa.
 
 ## Còn tồn
 

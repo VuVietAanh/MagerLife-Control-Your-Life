@@ -48,6 +48,12 @@ Project Vercel được import từ repo GitLab. Cấu hình build nằm trong `
 
 Mỗi lần push lên `main` Vercel tự deploy production. Nếu cần ép deploy lại mà không đổi code: `git commit --allow-empty -m "Trigger Vercel deploy"` rồi push.
 
+### MindSpace (tab "Tâm sự") chạy chung project
+
+`api/mindspace.py` là một Vercel Function Python, chạy FastAPI trong `mindspace/app.py`. `vercel.json` chuyển `/mindspace/*` về function này, nên frontend gọi cùng domain, không cần CORS hay project Vercel riêng. Thư viện Python lấy từ `requirements.txt` ở thư mục gốc (bản gọn, không có RAG). `functions.excludeFiles` loại `node_modules`, `dist` và các thư mục không cần khỏi gói Python.
+
+Kiểm tra sau deploy: `GET /mindspace/health` phải trả `{"status":"ok"}`.
+
 ## 3. Biến môi trường trên Vercel
 
 Đặt trong Vercel → Project Settings → Environment Variables. Giá trị thật chỉ nằm ở đây, không bao giờ nằm trong repo.
@@ -60,7 +66,9 @@ Mỗi lần push lên `main` Vercel tự deploy production. Nếu cần ép depl
 | `DATABASE_SSL` | Có | `true` |
 | `MAGERLIFE_SESSION_SECRET` | Có | Chuỗi ngẫu nhiên dài; đổi giá trị sẽ đăng xuất mọi phiên |
 | `MAGERLIFE_ADMIN_EMAILS` | Có | Email được làm admin, phân cách bằng dấu phẩy |
-| `MINDSPACE_SHARED_SECRET` | Khi dùng Tâm sự | ≥ 32 ký tự, khác `MAGERLIFE_SESSION_SECRET`, giống hệt biến cùng tên ở project MindSpace. Xem `mindspace/README.md` mục Đăng nhập |
+| `MINDSPACE_SHARED_SECRET` | Khi dùng Tâm sự | ≥ 32 ký tự, khác `MAGERLIFE_SESSION_SECRET`. API Node dùng để ký token, function MindSpace dùng để kiểm tra; cùng một project nên chỉ đặt một lần. Xem `mindspace/README.md` mục Đăng nhập |
+| `MINDSPACE_DATABASE_URL` | Khi dùng Tâm sự | Connection string của **project Neon riêng** cho MindSpace (hội thoại tâm sự không nằm chung DB với MagerLife). Bảng tự tạo ở lần chạy đầu |
+| `ANTHROPIC_API_KEY` | Khi dùng Tâm sự | Key Claude cho MindSpace |
 | `MAGERLIFE_ALLOWED_EMAILS` | Không | Email khác được phép đăng ký (sign-up đóng với mọi người còn lại) |
 | `MAGERLIFE_CORS_ORIGINS` | Không | Domain Vercel nếu frontend và API khác origin |
 | `MAGERLIFE_RATE_LIMIT_PER_MIN` | Không | Mặc định 180 request/phút/IP |
